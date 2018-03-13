@@ -1,0 +1,10 @@
+[package]
+name = "intcomp"
+version = "0.1.0"
+authors = ["Paul Masurel <paul.masurel@gmail.com>"]
+
+[dependencies]
+crunchy = "0.1.6"
+
+[dev-dependencies]
+rand = "0.3"
