@@ -48,6 +48,7 @@ fn create_array(block_len: usize, num_bits_arr: &[u8]) -> Vec<u32> {
 
 pub fn bench_compress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
     let num_blocks = num_bits_arr.len();
+    bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
     let mut original_values = create_array(TBitPacker::BLOCK_LEN, num_bits_arr);
     let mut compress = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
@@ -65,6 +66,7 @@ pub fn bench_compress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_
 
 pub fn bench_uncompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
     let num_blocks = num_bits_arr.len();
+    bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
     let mut original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr);
     let mut compressed = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
@@ -80,13 +82,13 @@ pub fn bench_uncompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bit
     bench.iter(|| {
         let mut offset = 0;
         for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
-            let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..(i + 1)*TBitPacker::BLOCK_LEN];
+            let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
             TBitPacker::uncompress(&compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
         }
-        for i in 0..num_blocks * TBitPacker::BLOCK_LEN {
-            debug_assert_eq!(result[i], original_values[i], "Failed at id {}", i);
-        }
+//        for i in 0..num_blocks * TBitPacker::BLOCK_LEN {
+//            debug_assert_eq!(result[i], original_values[i], "Failed at id {}", i);
+//        }
     });
 }
 
@@ -121,15 +123,17 @@ macro_rules! bench_one {
             use tests::bench_uncompress_util;
             use tests::bench_compress_util;
 
+            const NUM_INTS: usize = 1_000;
+
             #[bench]
             fn bench_uncompress(bench: &mut Bencher) {
-                let num_bits = [$n; 200];
+                let num_bits = [$n; NUM_INTS];
                 bench_uncompress_util::<$implementation>(bench, &num_bits[..]);
             }
 
             #[bench]
             fn bench_compress(bench: &mut Bencher) {
-                let num_bits = [$n; 200];
+                let num_bits = [$n; NUM_INTS];
                 bench_compress_util::<$implementation>(bench, &num_bits[..]);
             }
         }
