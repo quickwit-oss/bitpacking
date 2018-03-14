@@ -56,25 +56,25 @@ impl BitPacker for AVXBitPacker {
 
     const BLOCK_LEN: usize = AVX_BLOCK_SIZE;
 
-    fn compress(uncompressed: &[u32], compressed: &mut [u8], num_bits: u8) {
-        assert_eq!(uncompressed.len(), Self::BLOCK_LEN);
-        let uncompressed_ptr = uncompressed.as_ptr() as *const __m256i;
+    fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) {
+        assert_eq!(decompressed.len(), Self::BLOCK_LEN);
+        let decompressed_ptr = decompressed.as_ptr() as *const __m256i;
         let compressed_ptr = compressed.as_mut_ptr() as *mut __m256i;
         unsafe {
-            avxpackblock(uncompressed_ptr, compressed_ptr, num_bits);
+            avxpackblock(decompressed_ptr, compressed_ptr, num_bits);
         }
     }
 
-    fn uncompress(compressed: &[u8], uncompressed: &mut [u32], num_bits: u8) {
-        assert_eq!(uncompressed.len(), Self::BLOCK_LEN);
+    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
+        assert_eq!(decompressed.len(), Self::BLOCK_LEN);
         let compressed_ptr = compressed.as_ptr() as *const __m256i;
-        let uncompressed_ptr = uncompressed.as_mut_ptr() as *mut __m256i;
-        unsafe { avxunpackblock(compressed_ptr, uncompressed_ptr, num_bits); }
+        let decompressed_ptr = decompressed.as_mut_ptr() as *mut __m256i;
+        unsafe { avxunpackblock(compressed_ptr, decompressed_ptr, num_bits); }
     }
 
-    fn num_bits(uncompressed: &[u32]) -> u8 {
-        assert_eq!(uncompressed.len(), Self::BLOCK_LEN);
-        let input_ptr = uncompressed.as_ptr() as *const __m256i;
+    fn num_bits(decompressed: &[u32]) -> u8 {
+        assert_eq!(decompressed.len(), Self::BLOCK_LEN);
+        let input_ptr = decompressed.as_ptr() as *const __m256i;
         (0..32)
             .map(|i| unsafe {
                 let v = _mm256_lddqu_si256(input_ptr.offset(i));
@@ -88,12 +88,12 @@ impl BitPacker for AVXBitPacker {
 
 #[cfg(test)]
 mod test {
-    use tests::test_suite_compress_uncompress;
+    use tests::test_suite_compress_decompress;
     use super::AVXBitPacker;
 
     #[test]
     fn test_bitpacker() {
-        test_suite_compress_uncompress::<AVXBitPacker>()
+        test_suite_compress_decompress::<AVXBitPacker>()
     }
 
     bench_suite!(AVXBitPacker);

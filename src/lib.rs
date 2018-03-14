@@ -27,11 +27,11 @@ pub trait BitPacker {
     // most significant bit of the largest integer.
     const BLOCK_LEN: usize;
 
-    fn compress(uncompressed: &[u32], compressed: &mut [u8], num_bits: u8);
+    fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8);
 
-    fn uncompress(compressed: &[u8], uncompressed: &mut [u32], num_bits: u8);
+    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8);
 
-    fn num_bits(uncompressed: &[u32]) -> u8;
+    fn num_bits(decompressed: &[u32]) -> u8;
 }
 
 
@@ -44,13 +44,4 @@ fn most_significant_bit(v: u32) -> u8 {
         32u8 - (v.leading_zeros() as u8)
     }
 }
-
-
-//
-//#[cfg(test)]
-//pub(crate) mod tests {
-//
-//
-//}
-
 

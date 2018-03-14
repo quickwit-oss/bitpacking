@@ -7,7 +7,6 @@ use BitPacker;
 
 const SIMD_BLOCK_LEN: usize = 128;
 
-
 fn maxbits_u32x4(mut accumulator: __m128i) -> u8 {
     unsafe {
         let _tmp1 = _mm_or_si128(_mm_srli_si128(accumulator, 8), accumulator); // (A,B,C,D) xor (0,0,A,B) = (A,B,C xor A,D xor B)
@@ -17,61 +16,152 @@ fn maxbits_u32x4(mut accumulator: __m128i) -> u8 {
     }
 }
 
-unsafe fn memset(out: *mut u32, fill_val: u32, len: usize) {
-    let out_slice = slice::from_raw_parts_mut(out, len);
-    for val in out_slice.iter_mut() {
-        *val = fill_val;
-    }
-}
+macro_rules! pack_unpack_with_bits {
 
-unsafe fn __SIMD_fastunpack1_32(mut input_ptr: *const __m128i, _out: *mut u32) {
-    let mut out = _out as *mut __m128i;
-    let mut InReg1: __m128i = _mm_loadu_si128(input_ptr);
-    let mut InReg2: __m128i = InReg1 ;
-    let mut OutReg1: __m128i;
-    let mut OutReg2: __m128i;
-    let mut OutReg3: __m128i;
-    let mut OutReg4: __m128i;
-    let mask = _mm_set1_epi32(1i32);
+    ($name:ident, $n:expr) => {
 
-    let mut shift = 0i32;
+        mod $name {
 
-    unroll! {
-        for i in 0..8 {
-            const i_i32: i32 = i as i32;
-            OutReg1 = _mm_and_si128(_mm_srli_epi32(InReg1, 4 * i_i32), mask);
-            OutReg2 = _mm_and_si128(_mm_srli_epi32(InReg2, 4 * i_i32+1), mask);
-            OutReg3 = _mm_and_si128(_mm_srli_epi32(InReg1, 4 * i_i32+2), mask);
-            OutReg4 = _mm_and_si128(_mm_srli_epi32(InReg2, 4 * i_i32+3), mask);
-            _mm_storeu_si128(out, OutReg1);
-            out = out.offset(1);
-            _mm_storeu_si128(out, OutReg2);
-            out = out.offset(1);
-            _mm_storeu_si128(out, OutReg3);
-            out = out.offset(1);
-            _mm_storeu_si128(out, OutReg4);
-            out = out.offset(1);
+            use super::SIMD_BLOCK_LEN;
+            use std::arch::x86_64::{
+                __m128i,
+                _mm_loadu_si128,
+                _mm_cvtsi128_si32,
+                _mm_srli_si128,
+                _mm_set1_epi32,
+                _mm_slli_epi32,
+                _mm_srli_epi32,
+                _mm_storeu_si128,
+                _mm_or_si128,
+                _mm_and_si128
+                };
+
+            const NUM_BITS: usize = $n;
+            const NUM_BYTES_PER_BLOCK: usize = NUM_BITS * super::SIMD_BLOCK_LEN / 8;
+
+            #[inline(always)]
+            pub fn pack(input_arr: &[u32], output_arr: &mut [u8]) {
+
+                assert_eq!(input_arr.len(), SIMD_BLOCK_LEN);
+                assert!(output_arr.len() >= NUM_BYTES_PER_BLOCK);
+
+
+                let input_ptr = input_arr.as_ptr() as *const __m128i;
+                let mut output_ptr = output_arr.as_mut_ptr() as *mut __m128i;
+
+                unsafe {
+                    let mut out_register: __m128i = _mm_loadu_si128(input_ptr);
+
+                    unroll! {
+                        for iter in 0..31 {
+                            const i: usize = 1 + iter;
+                            let in_register: __m128i = _mm_loadu_si128(input_ptr.offset(i as isize));
+                            const bits_filled: usize = i * NUM_BITS;
+                            const inner_cursor: usize = bits_filled % 32;
+                            const inner_capacity: usize = 32 - inner_cursor;
+                            if inner_cursor > 0 {
+                                out_register = _mm_or_si128(out_register, _mm_slli_epi32(in_register, inner_cursor as i32));
+                            } else {
+                                out_register = in_register;
+                            }
+                            if inner_capacity <= NUM_BITS {
+                                _mm_storeu_si128(output_ptr, out_register);
+                                output_ptr = output_ptr.offset(1);
+                                if inner_capacity < NUM_BITS {
+                                    out_register = _mm_srli_epi32(in_register, inner_capacity as i32);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            #[inline(always)]
+            pub fn unpack(compressed: &[u8], output: &mut [u32]) {
+
+                assert!(compressed.len() >= NUM_BYTES_PER_BLOCK);
+                assert_eq!(output.len(), SIMD_BLOCK_LEN);
+
+                let mut input_ptr = compressed.as_ptr() as *const __m128i;
+                let output_ptr = output.as_mut_ptr()  as *mut __m128i;
+
+                let mask_scalar: u32 = ((1u64 << NUM_BITS) - 1u64) as u32;
+                unsafe {
+                    let mask = _mm_set1_epi32(mask_scalar as i32);
+
+                    let mut in_register: __m128i = _mm_loadu_si128(input_ptr);
+                    input_ptr = input_ptr.offset(1);
+
+                    let out_register = _mm_and_si128(  in_register, mask);
+                    _mm_storeu_si128(output_ptr, out_register);
+
+                    unroll! {
+                        for iter in 0..31 {
+                            const i: usize = iter + 1;
+
+                            const inner_cursor: usize = (i * NUM_BITS) % 32;
+                            const inner_capacity: usize = 32 - inner_cursor;
+
+                            let mut out_register: __m128i =
+                                if inner_cursor == 0 {
+                                    _mm_and_si128(in_register, mask)
+                                } else {
+                                    _mm_and_si128(_mm_srli_epi32(in_register, inner_cursor as i32), mask)
+                                };
+
+                            if inner_capacity <= NUM_BITS && i != 31 {
+                                in_register = _mm_loadu_si128(input_ptr);
+                                input_ptr = input_ptr.offset(1);
+                                if inner_capacity < NUM_BITS {
+                                    out_register = _mm_or_si128(out_register, _mm_and_si128(_mm_slli_epi32(in_register, inner_capacity as i32), mask))
+                                }
+
+                            }
+
+                            _mm_storeu_si128(output_ptr.offset(i as isize), out_register);
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
-include!("generated.rs");
 
 
-unsafe fn __SIMD_fastunpack32_32(input_ptr: *const __m128i, _out: *mut u32) {
-    let out: *mut __m128i = _out as *mut __m128i;
-    unroll! {
-        for i in 0..32 {
-            _mm_storeu_si128(out.offset(i as isize), _mm_loadu_si128(input_ptr.offset(i as isize)));
-        }
-    }
-}
-
-fn SIMD_nullunpacker32(out: &mut [u32]) {
-    for el in out.iter_mut() {
-        *el = 0u32;
-    }
-}
+pack_unpack_with_bits!(pack_unpack_with_bits_1, 1);
+pack_unpack_with_bits!(pack_unpack_with_bits_2, 2);
+pack_unpack_with_bits!(pack_unpack_with_bits_3, 3);
+pack_unpack_with_bits!(pack_unpack_with_bits_4, 4);
+pack_unpack_with_bits!(pack_unpack_with_bits_5, 5);
+pack_unpack_with_bits!(pack_unpack_with_bits_6, 6);
+pack_unpack_with_bits!(pack_unpack_with_bits_7, 7);
+pack_unpack_with_bits!(pack_unpack_with_bits_8, 8);
+pack_unpack_with_bits!(pack_unpack_with_bits_9, 9);
+pack_unpack_with_bits!(pack_unpack_with_bits_10, 10);
+pack_unpack_with_bits!(pack_unpack_with_bits_11, 11);
+pack_unpack_with_bits!(pack_unpack_with_bits_12, 12);
+pack_unpack_with_bits!(pack_unpack_with_bits_13, 13);
+pack_unpack_with_bits!(pack_unpack_with_bits_14, 14);
+pack_unpack_with_bits!(pack_unpack_with_bits_15, 15);
+pack_unpack_with_bits!(pack_unpack_with_bits_16, 16);
+pack_unpack_with_bits!(pack_unpack_with_bits_17, 17);
+pack_unpack_with_bits!(pack_unpack_with_bits_18, 18);
+pack_unpack_with_bits!(pack_unpack_with_bits_19, 19);
+pack_unpack_with_bits!(pack_unpack_with_bits_20, 20);
+pack_unpack_with_bits!(pack_unpack_with_bits_21, 21);
+pack_unpack_with_bits!(pack_unpack_with_bits_22, 22);
+pack_unpack_with_bits!(pack_unpack_with_bits_23, 23);
+pack_unpack_with_bits!(pack_unpack_with_bits_24, 24);
+pack_unpack_with_bits!(pack_unpack_with_bits_25, 25);
+pack_unpack_with_bits!(pack_unpack_with_bits_26, 26);
+pack_unpack_with_bits!(pack_unpack_with_bits_27, 27);
+pack_unpack_with_bits!(pack_unpack_with_bits_28, 28);
+pack_unpack_with_bits!(pack_unpack_with_bits_29, 29);
+pack_unpack_with_bits!(pack_unpack_with_bits_30, 30);
+pack_unpack_with_bits!(pack_unpack_with_bits_31, 31);
+pack_unpack_with_bits!(pack_unpack_with_bits_32, 32);
 
 
 pub struct SIMDBitPacker;
@@ -80,96 +170,94 @@ impl BitPacker for SIMDBitPacker {
 
     const BLOCK_LEN: usize = 128;
 
-    fn compress(uncompressed: &[u32], compressed: &mut [u8], num_bits: u8) {
-        assert_eq!(uncompressed.len(), SIMD_BLOCK_LEN);
-        assert!(compressed.len() >= (num_bits as usize) * SIMD_BLOCK_LEN / 8);
-        let uncompressed_ptr = uncompressed.as_ptr() as *const __m128i;
-        let compressed_ptr = compressed.as_mut_ptr() as *mut __m128i;
+    fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) {
         match num_bits {
-            0 => { return }
-            1 => unsafe { __SIMD_fastpackwithoutmask1_32(uncompressed_ptr, compressed_ptr); }
-            2 => unsafe { __SIMD_fastpackwithoutmask2_32(uncompressed_ptr, compressed_ptr); }
-            3 => unsafe { __SIMD_fastpackwithoutmask3_32(uncompressed_ptr, compressed_ptr); }
-            4 => unsafe { __SIMD_fastpackwithoutmask4_32(uncompressed_ptr, compressed_ptr); }
-            5 => unsafe { __SIMD_fastpackwithoutmask5_32(uncompressed_ptr, compressed_ptr); }
-            6 => unsafe { __SIMD_fastpackwithoutmask6_32(uncompressed_ptr, compressed_ptr); }
-            7 => unsafe { __SIMD_fastpackwithoutmask7_32(uncompressed_ptr, compressed_ptr); }
-            8 => unsafe { __SIMD_fastpackwithoutmask8_32(uncompressed_ptr, compressed_ptr); }
-            9 => unsafe { __SIMD_fastpackwithoutmask9_32(uncompressed_ptr, compressed_ptr); }
-            10 => unsafe { __SIMD_fastpackwithoutmask10_32(uncompressed_ptr, compressed_ptr); }
-            11 => unsafe { __SIMD_fastpackwithoutmask11_32(uncompressed_ptr, compressed_ptr); }
-            12 => unsafe { __SIMD_fastpackwithoutmask12_32(uncompressed_ptr, compressed_ptr); }
-            13 => unsafe { __SIMD_fastpackwithoutmask13_32(uncompressed_ptr, compressed_ptr); }
-            14 => unsafe { __SIMD_fastpackwithoutmask14_32(uncompressed_ptr, compressed_ptr); }
-            15 => unsafe { __SIMD_fastpackwithoutmask15_32(uncompressed_ptr, compressed_ptr); }
-            16 => unsafe { __SIMD_fastpackwithoutmask16_32(uncompressed_ptr, compressed_ptr); }
-            17 => unsafe { __SIMD_fastpackwithoutmask17_32(uncompressed_ptr, compressed_ptr); }
-            18 => unsafe { __SIMD_fastpackwithoutmask18_32(uncompressed_ptr, compressed_ptr); }
-            19 => unsafe { __SIMD_fastpackwithoutmask19_32(uncompressed_ptr, compressed_ptr); }
-            20 => unsafe { __SIMD_fastpackwithoutmask20_32(uncompressed_ptr, compressed_ptr); }
-            21 => unsafe { __SIMD_fastpackwithoutmask21_32(uncompressed_ptr, compressed_ptr); }
-            22 => unsafe { __SIMD_fastpackwithoutmask22_32(uncompressed_ptr, compressed_ptr); }
-            23 => unsafe { __SIMD_fastpackwithoutmask23_32(uncompressed_ptr, compressed_ptr); }
-            24 => unsafe { __SIMD_fastpackwithoutmask24_32(uncompressed_ptr, compressed_ptr); }
-            25 => unsafe { __SIMD_fastpackwithoutmask25_32(uncompressed_ptr, compressed_ptr); }
-            26 => unsafe { __SIMD_fastpackwithoutmask26_32(uncompressed_ptr, compressed_ptr); }
-            27 => unsafe { __SIMD_fastpackwithoutmask27_32(uncompressed_ptr, compressed_ptr); }
-            28 => unsafe { __SIMD_fastpackwithoutmask28_32(uncompressed_ptr, compressed_ptr); }
-            29 => unsafe { __SIMD_fastpackwithoutmask29_32(uncompressed_ptr, compressed_ptr); }
-            30 => unsafe { __SIMD_fastpackwithoutmask30_32(uncompressed_ptr, compressed_ptr); }
-            31 => unsafe { __SIMD_fastpackwithoutmask31_32(uncompressed_ptr, compressed_ptr); }
-            32 => unsafe { __SIMD_fastpackwithoutmask32_32(uncompressed_ptr, compressed_ptr); }
+            0 => {}
+            1 => pack_unpack_with_bits_1::pack(decompressed, compressed),
+            2 => pack_unpack_with_bits_2::pack(decompressed, compressed),
+            3 => pack_unpack_with_bits_3::pack(decompressed, compressed),
+            4 => pack_unpack_with_bits_4::pack(decompressed, compressed),
+            5 => pack_unpack_with_bits_5::pack(decompressed, compressed),
+            6 => pack_unpack_with_bits_6::pack(decompressed, compressed),
+            7 => pack_unpack_with_bits_7::pack(decompressed, compressed),
+            8 => pack_unpack_with_bits_8::pack(decompressed, compressed),
+            9 => pack_unpack_with_bits_9::pack(decompressed, compressed),
+            10 => pack_unpack_with_bits_10::pack(decompressed, compressed),
+            11 => pack_unpack_with_bits_11::pack(decompressed, compressed),
+            12 => pack_unpack_with_bits_12::pack(decompressed, compressed),
+            13 => pack_unpack_with_bits_13::pack(decompressed, compressed),
+            14 => pack_unpack_with_bits_14::pack(decompressed, compressed),
+            15 => pack_unpack_with_bits_15::pack(decompressed, compressed),
+            16 => pack_unpack_with_bits_16::pack(decompressed, compressed),
+            17 => pack_unpack_with_bits_17::pack(decompressed, compressed),
+            18 => pack_unpack_with_bits_18::pack(decompressed, compressed),
+            19 => pack_unpack_with_bits_19::pack(decompressed, compressed),
+            20 => pack_unpack_with_bits_20::pack(decompressed, compressed),
+            21 => pack_unpack_with_bits_21::pack(decompressed, compressed),
+            22 => pack_unpack_with_bits_22::pack(decompressed, compressed),
+            23 => pack_unpack_with_bits_23::pack(decompressed, compressed),
+            24 => pack_unpack_with_bits_24::pack(decompressed, compressed),
+            25 => pack_unpack_with_bits_25::pack(decompressed, compressed),
+            26 => pack_unpack_with_bits_26::pack(decompressed, compressed),
+            27 => pack_unpack_with_bits_27::pack(decompressed, compressed),
+            28 => pack_unpack_with_bits_28::pack(decompressed, compressed),
+            29 => pack_unpack_with_bits_29::pack(decompressed, compressed),
+            30 => pack_unpack_with_bits_30::pack(decompressed, compressed),
+            31 => pack_unpack_with_bits_31::pack(decompressed, compressed),
+            32 => pack_unpack_with_bits_32::pack(decompressed, compressed),
             _ => {}
         }
     }
 
-    fn uncompress(compressed: &[u8], uncompressed: &mut [u32], num_bits: u8) {
-        assert_eq!(uncompressed.len(), Self::BLOCK_LEN);
+    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
+        assert_eq!(decompressed.len(), Self::BLOCK_LEN);
         assert!(compressed.len() >= (num_bits as usize) * Self::BLOCK_LEN / 8);
         assert!(num_bits <= 32u8);
-        let compressed_ptr = compressed.as_ptr() as *const __m128i;
-        let uncompressed_ptr = uncompressed.as_mut_ptr();
         match num_bits {
-            0 => SIMD_nullunpacker32(uncompressed),
-            1 => unsafe { __SIMD_fastunpack1_32(compressed_ptr, uncompressed_ptr) },
-            2 => unsafe { __SIMD_fastunpack2_32(compressed_ptr, uncompressed_ptr) },
-            3 => unsafe { __SIMD_fastunpack3_32(compressed_ptr, uncompressed_ptr) },
-            4 => unsafe { __SIMD_fastunpack4_32(compressed_ptr, uncompressed_ptr) },
-            5 => unsafe { __SIMD_fastunpack5_32(compressed_ptr, uncompressed_ptr) },
-            6 => unsafe { __SIMD_fastunpack6_32(compressed_ptr, uncompressed_ptr) },
-            7 => unsafe { __SIMD_fastunpack7_32(compressed_ptr, uncompressed_ptr) },
-            8 => unsafe { __SIMD_fastunpack8_32(compressed_ptr, uncompressed_ptr) },
-            9 => unsafe { __SIMD_fastunpack9_32(compressed_ptr, uncompressed_ptr) },
-            10 => unsafe { __SIMD_fastunpack10_32(compressed_ptr, uncompressed_ptr) },
-            11 => unsafe { __SIMD_fastunpack11_32(compressed_ptr, uncompressed_ptr) },
-            12 => unsafe { __SIMD_fastunpack12_32(compressed_ptr, uncompressed_ptr) },
-            13 => unsafe { __SIMD_fastunpack13_32(compressed_ptr, uncompressed_ptr) },
-            14 => unsafe { __SIMD_fastunpack14_32(compressed_ptr, uncompressed_ptr) },
-            15 => unsafe { __SIMD_fastunpack15_32(compressed_ptr, uncompressed_ptr) },
-            16 => unsafe { __SIMD_fastunpack16_32(compressed_ptr, uncompressed_ptr) },
-            17 => unsafe { __SIMD_fastunpack17_32(compressed_ptr, uncompressed_ptr) },
-            18 => unsafe { __SIMD_fastunpack18_32(compressed_ptr, uncompressed_ptr) },
-            19 => unsafe { __SIMD_fastunpack19_32(compressed_ptr, uncompressed_ptr) },
-            20 => unsafe { __SIMD_fastunpack20_32(compressed_ptr, uncompressed_ptr) },
-            21 => unsafe { __SIMD_fastunpack21_32(compressed_ptr, uncompressed_ptr) },
-            22 => unsafe { __SIMD_fastunpack22_32(compressed_ptr, uncompressed_ptr) },
-            23 => unsafe { __SIMD_fastunpack23_32(compressed_ptr, uncompressed_ptr) },
-            24 => unsafe { __SIMD_fastunpack24_32(compressed_ptr, uncompressed_ptr) },
-            25 => unsafe { __SIMD_fastunpack25_32(compressed_ptr, uncompressed_ptr) },
-            26 => unsafe { __SIMD_fastunpack26_32(compressed_ptr, uncompressed_ptr) },
-            27 => unsafe { __SIMD_fastunpack27_32(compressed_ptr, uncompressed_ptr) },
-            28 => unsafe { __SIMD_fastunpack28_32(compressed_ptr, uncompressed_ptr) },
-            29 => unsafe { __SIMD_fastunpack29_32(compressed_ptr, uncompressed_ptr) },
-            30 => unsafe { __SIMD_fastunpack30_32(compressed_ptr, uncompressed_ptr) },
-            31 => unsafe { __SIMD_fastunpack31_32(compressed_ptr, uncompressed_ptr) },
-            32 => unsafe { __SIMD_fastunpack32_32(compressed_ptr, uncompressed_ptr) },
+            0 => {
+                for el in decompressed.iter_mut() {
+                    *el = 0u32;
+                }
+            },
+            1 => pack_unpack_with_bits_1::unpack(compressed, decompressed),
+            2 => pack_unpack_with_bits_2::unpack(compressed, decompressed),
+            3 => pack_unpack_with_bits_3::unpack(compressed, decompressed),
+            4 => pack_unpack_with_bits_4::unpack(compressed, decompressed),
+            5 => pack_unpack_with_bits_5::unpack(compressed, decompressed),
+            6 => pack_unpack_with_bits_6::unpack(compressed, decompressed),
+            7 => pack_unpack_with_bits_7::unpack(compressed, decompressed),
+            8 => pack_unpack_with_bits_8::unpack(compressed, decompressed),
+            9 => pack_unpack_with_bits_9::unpack(compressed, decompressed),
+            10 => pack_unpack_with_bits_10::unpack(compressed, decompressed),
+            11 => pack_unpack_with_bits_11::unpack(compressed, decompressed),
+            12 => pack_unpack_with_bits_12::unpack(compressed, decompressed),
+            13 => pack_unpack_with_bits_13::unpack(compressed, decompressed),
+            14 => pack_unpack_with_bits_14::unpack(compressed, decompressed),
+            15 => pack_unpack_with_bits_15::unpack(compressed, decompressed),
+            16 => pack_unpack_with_bits_16::unpack(compressed, decompressed),
+            17 => pack_unpack_with_bits_17::unpack(compressed, decompressed),
+            18 => pack_unpack_with_bits_18::unpack(compressed, decompressed),
+            19 => pack_unpack_with_bits_19::unpack(compressed, decompressed),
+            20 => pack_unpack_with_bits_20::unpack(compressed, decompressed),
+            21 => pack_unpack_with_bits_21::unpack(compressed, decompressed),
+            22 => pack_unpack_with_bits_22::unpack(compressed, decompressed),
+            23 => pack_unpack_with_bits_23::unpack(compressed, decompressed),
+            24 => pack_unpack_with_bits_24::unpack(compressed, decompressed),
+            25 => pack_unpack_with_bits_25::unpack(compressed, decompressed),
+            26 => pack_unpack_with_bits_26::unpack(compressed, decompressed),
+            27 => pack_unpack_with_bits_27::unpack(compressed, decompressed),
+            28 => pack_unpack_with_bits_28::unpack(compressed, decompressed),
+            29 => pack_unpack_with_bits_29::unpack(compressed, decompressed),
+            30 => pack_unpack_with_bits_30::unpack(compressed, decompressed),
+            31 => pack_unpack_with_bits_31::unpack(compressed, decompressed),
+            32 => pack_unpack_with_bits_32::unpack(compressed, decompressed),
             _ => {}
         }
     }
 
-    fn num_bits(uncompressed: &[u32]) -> u8 {
-        assert_eq!(uncompressed.len(), Self::BLOCK_LEN);
-        let input_ptr = uncompressed.as_ptr() as *const __m128i;
+    fn num_bits(decompressed: &[u32]) -> u8 {
+        assert_eq!(decompressed.len(), Self::BLOCK_LEN);
+        let input_ptr = decompressed.as_ptr() as *const __m128i;
         (0..32)
             .map(|i| unsafe {
                 let v = _mm_loadu_si128(input_ptr.offset(i));
@@ -185,16 +273,81 @@ impl BitPacker for SIMDBitPacker {
 #[cfg(test)]
 mod test {
 
-    use tests::test_suite_compress_uncompress;
+    use tests::test_suite_compress_decompress;
     use super::SIMDBitPacker;
 
     #[test]
     fn test_bitpacker() {
-        test_suite_compress_uncompress::<SIMDBitPacker>()
+        test_suite_compress_decompress::<SIMDBitPacker>()
     }
 
-    bench_suite!(SIMDBitPacker);
+     bench_suite!(SIMDBitPacker);
 
+
+
+    /*
+    #[test]
+    fn test_generated_vs_macro() {
+        unsafe {
+
+
+            let mut data = vec![13, 31, 4, 0, 13, 26, 14, 30, 13, 26, 14, 30, 13];
+            data.resize(128, 1u32);
+
+            let mut compressed = vec![0u8; 5*16];
+
+                        let mut result_a = vec![0u32; 128];
+            let mut result_b = vec![0u32; 128];
+
+            __SIMD_fastpackwithoutmask5_32(
+                data.as_ptr() as *const __m128i,
+                compressed[..].as_mut_ptr() as *mut __m128i
+            );
+
+            let input_ptr = compressed.as_ptr() as *const __m128i;
+
+            unpack5(compressed.as_ptr() as *const __m128i, result_a[..].as_mut_ptr());
+            __SIMD_fastunpack5_32(compressed.as_ptr() as *const __m128i, result_b[..].as_mut_ptr());
+
+            for i in 0..128 {
+//                assert_eq!(result_a[i], data[i], "Not the same at index {}", i);
+                assert_eq!(result_a[i], data[i], "Not the same at index {}", i);
+            }
+        }
+    }
+
+
+    #[test]
+    fn test_comp() {
+        unsafe {
+
+            let PATTERN = [13, 31, 4, 0, 13, 26, 14, 30, 13, 26, 14, 30, 13];
+            let data: Vec<u32> = (0..128)
+                .map(|el| PATTERN[el % 13])
+                .collect();
+
+            let mut compressed = vec![0u8; 5*16];
+
+            __SIMD_fastpackwithoutmask5_32(
+                data.as_ptr() as *const __m128i,
+                compressed[..].as_mut_ptr() as *mut __m128i
+            );
+
+            let input_ptr = compressed.as_ptr() as *const __m128i;
+            let mut result_a = vec![0u32; 128];
+            let mut result_b = vec![0u32; 128];
+            unpack5(compressed.as_ptr() as *const __m128i, result_a[..].as_mut_ptr());
+
+            let mut pos: Vec<usize> = (0..128)
+                .filter(|&el| result_a[el] != data[el])
+                .collect();
+            for i in 0..128 {
+//                assert_eq!(result_a[i], data[i], "Not the same at index {}", i);
+                assert_eq!(pos.len(),0, "Not the same at index {:?}", pos);
+            }
+        }
+    }
+    */
 }
 
 
