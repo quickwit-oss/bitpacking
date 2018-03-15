@@ -2,7 +2,6 @@ extern crate rand;
 extern crate test;
 
 use self::rand::{Rng, SeedableRng, XorShiftRng};
-use self::rand::distributions::{IndependentSample, Range};
 use super::BitPacker;
 use super::most_significant_bit;
 use self::test::Bencher;
@@ -31,7 +30,7 @@ fn test_util_compress_decompress<TBitPacker: BitPacker>(original: &[u32], expect
     TBitPacker::decompress(&compressed[..compressed_len], &mut result[..], numbits);
 
     for i in 0..TBitPacker::BLOCK_LEN {
-        assert_eq!(original[i], result[i], "index {}, {:?}", i, &result[..i+5]);
+        assert_eq!(original[i], result[i], "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}", i, expected_num_bits, &original[..i+5], &result[..i+5]);
     }
 }
 
@@ -69,7 +68,7 @@ pub fn bench_compress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_
 pub fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
     let num_blocks = num_bits_arr.len();
     bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
-    let mut original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr);
+    let original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr);
     let mut compressed = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
     let mut offset = 0;
@@ -88,11 +87,9 @@ pub fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bit
             TBitPacker::decompress(&compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
         }
-//        for i in 0..num_blocks * TBitPacker::BLOCK_LEN {
-//            debug_assert_eq!(result[i], original_values[i], "Failed at id {}", i);
-//        }
     });
 }
+
 
 pub fn test_suite_compress_decompress<TBitPacker: BitPacker>() {
     let num_blocks = (1 << 15) / TBitPacker::BLOCK_LEN;
@@ -114,14 +111,13 @@ pub fn test_suite_compress_decompress<TBitPacker: BitPacker>() {
 
 macro_rules! bench_one {
 
-    ($name:ident, $n:expr, $implementation:ty) => {
+    ($name:ident, $n:expr, $implementation:ident) => {
         mod $name {
 
             extern crate test;
             use self::test::Bencher;
 
-            use AVXBitPacker;
-            use SIMDBitPacker;
+            use $implementation as BenchedBitPacker;
             use tests::bench_decompress_util;
             use tests::bench_compress_util;
 
@@ -130,13 +126,13 @@ macro_rules! bench_one {
             #[bench]
             fn bench_decompress(bench: &mut Bencher) {
                 let num_bits = [$n; NUM_INTS];
-                bench_decompress_util::<$implementation>(bench, &num_bits[..]);
+                bench_decompress_util::<BenchedBitPacker>(bench, &num_bits[..]);
             }
 
             #[bench]
             fn bench_compress(bench: &mut Bencher) {
                 let num_bits = [$n; NUM_INTS];
-                bench_compress_util::<$implementation>(bench, &num_bits[..]);
+                bench_compress_util::<BenchedBitPacker>(bench, &num_bits[..]);
             }
         }
     }
@@ -144,7 +140,7 @@ macro_rules! bench_one {
 
 #[macro_export]
 macro_rules! bench_suite {
-    ($implementation:ty) => {
+    ($implementation:ident) => {
         bench_one!(bench_num_bits_01,  1, $implementation);
         bench_one!(bench_num_bits_02,  2, $implementation);
         bench_one!(bench_num_bits_03,  3, $implementation);
