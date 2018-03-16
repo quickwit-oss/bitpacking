@@ -5,11 +5,11 @@ fn set1(el: i32) -> DataType {
 }
 
 fn right_shift_32(el: DataType, shift: i32) -> DataType {
-    el << shift
+    el >> shift
 }
 
 fn left_shift_32(el: DataType, shift: i32) -> DataType {
-    el >> shift
+    el << shift
 }
 
 fn op_or(left: DataType, right: DataType) -> DataType {

@@ -11,13 +11,17 @@ use std::arch::x86_64::_mm256_storeu_si256 as store_unaligned;
 
 use std::arch::x86_64::{_mm256_extract_epi32, _mm256_srli_si256};
 
+#[allow(non_snake_case)]
 fn or_collapse_to_u32(accumulator: DataType) -> u32 {
     unsafe {
-        let tmp1 = op_or(_mm256_srli_si256(accumulator, 8), accumulator);
-        let tmp2 = op_or(_mm256_srli_si256(tmp1, 4), tmp1);
-        let ans1 = _mm256_extract_epi32(tmp2,0) as u32;
-        let ans2 = _mm256_extract_epi32(tmp2,4) as u32;
-        ans1 | ans2
+        let a__b__c__d__e__f__g__h_ = accumulator;
+        let ______a__b__c__d__e__f =_mm256_srli_si256(a__b__c__d__e__f__g__h_, 8);
+        let a__b__ca_db_ce_df_ge_hf = op_or(a__b__c__d__e__f__g__h_, ______a__b__c__d__e__f);
+        let ___a__b__ca_db_ce_df_ge = _mm256_srli_si256(a__b__ca_db_ce_df_ge_hf, 4);
+        let _________cadb_________gehf = op_or(a__b__ca_db_ce_df_ge_hf, ___a__b__ca_db_ce_df_ge);
+        let cadb = _mm256_extract_epi32(_________cadb_________gehf, 4);
+        let gehf = _mm256_extract_epi32(_________cadb_________gehf, 4);
+        (cadb | gehf) as u32
     }
 }
 

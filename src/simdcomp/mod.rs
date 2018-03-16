@@ -11,11 +11,15 @@ use std::arch::x86_64::_mm_storeu_si128 as store_unaligned;
 
 use std::arch::x86_64::{_mm_srli_si128, _mm_cvtsi128_si32};
 
+#[allow(non_snake_case)]
 fn or_collapse_to_u32(accumulator: DataType) -> u32 {
     unsafe {
-        let _tmp1 = op_or(_mm_srli_si128(accumulator, 8), accumulator); // (A,B,C,D) xor (0,0,A,B) = (A,B,C xor A,D xor B)
-        let _tmp2 = op_or(_mm_srli_si128(_tmp1, 4), _tmp1); //  (A,B,C xor A,D xor B) xor  (0,0,0,C xor A)
-        _mm_cvtsi128_si32(_tmp2) as u32
+        let a__b__c__d_ = accumulator;
+        let ______a__b_ = _mm_srli_si128(a__b__c__d_, 8);
+        let a__b__ca_db = op_or(a__b__c__d_, ______a__b_);
+        let ___a__b__ca = _mm_srli_si128(a__b__ca_db, 4);
+        let _______cadb = op_or(a__b__ca_db, ___a__b__ca);
+        _mm_cvtsi128_si32(_______cadb) as u32
     }
 }
 

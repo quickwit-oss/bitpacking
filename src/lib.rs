@@ -1,6 +1,4 @@
 #![allow(unused_unsafe)]
-
-
 #![feature(stdsimd)]
 #![feature(test)]
 
@@ -14,7 +12,6 @@ pub(crate) mod tests;
 #[macro_use]
 mod macros;
 
-
 mod scalar;
 mod avxpacking;
 mod simdcomp;
@@ -23,8 +20,9 @@ pub use scalar::ScalarBitPacker;
 pub use avxpacking::AVXBitPacker;
 pub use simdcomp::SIMDBitPacker;
 
-pub trait BitPacker {
 
+
+pub trait BitPacker {
     // Integers are compressed in pack of `BLOCK_LEN` `u32`-integers.
     //
     // `BLOCK_LEN` is required to be a power of 2, greater than 8.
@@ -41,8 +39,6 @@ pub trait BitPacker {
     fn num_bits(decompressed: &[u32]) -> u8;
 }
 
-
-
 /// Returns the most significant bit.
 fn most_significant_bit(v: u32) -> u8 {
     if v == 0 {
@@ -51,5 +47,3 @@ fn most_significant_bit(v: u32) -> u8 {
         32u8 - (v.leading_zeros() as u8)
     }
 }
-
-

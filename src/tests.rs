@@ -10,9 +10,7 @@ pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
     let seed: &[u32; 4] = &[1, 2, 3, 4];
     let max_val = 1 << max_num_bits;
     let mut rng: XorShiftRng = XorShiftRng::from_seed(*seed);
-    (0..n)
-        .map(|_| rng.gen_range(0, max_val))
-        .collect()
+    (0..n).map(|_| rng.gen_range(0, max_val)).collect()
 }
 
 fn test_util_compress_decompress<TBitPacker: BitPacker>(original: &[u32], expected_num_bits: u8) {
@@ -23,14 +21,22 @@ fn test_util_compress_decompress<TBitPacker: BitPacker>(original: &[u32], expect
     let numbits = TBitPacker::num_bits(original);
     assert_eq!(numbits, expected_num_bits);
     TBitPacker::compress(&original[..], &mut compressed[..], numbits);
-    let compressed_len = (numbits as usize)*TBitPacker::BLOCK_LEN / 8;
+    let compressed_len = (numbits as usize) * TBitPacker::BLOCK_LEN / 8;
     for &el in &compressed[compressed_len..] {
         assert_eq!(el, 0u8);
     }
     TBitPacker::decompress(&compressed[..compressed_len], &mut result[..], numbits);
 
     for i in 0..TBitPacker::BLOCK_LEN {
-        assert_eq!(original[i], result[i], "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}", i, expected_num_bits, &original[..i+5], &result[..i+5]);
+        assert_eq!(
+            original[i],
+            result[i],
+            "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}",
+            i,
+            expected_num_bits,
+            &original[..i + 5],
+            &result[..i + 5]
+        );
     }
 }
 
@@ -54,16 +60,17 @@ pub fn bench_compress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_
     bench.iter(|| {
         let mut offset = 0;
         for i in 0..num_blocks {
-            let block = &original_values[i*TBitPacker::BLOCK_LEN..(i+1)*TBitPacker::BLOCK_LEN];
+            let start = i * TBitPacker::BLOCK_LEN;
+            let stop = start + TBitPacker::BLOCK_LEN;
+            let block = &original_values[start..stop];
             let num_bits = TBitPacker::num_bits(block);
-            let stride = TBitPacker::BLOCK_LEN  * (num_bits as usize) / 8;
+            let stride = TBitPacker::BLOCK_LEN * (num_bits as usize) / 8;
             num_bits_vec.push(num_bits);
             TBitPacker::compress(block, &mut compress[offset..], num_bits);
             offset += stride;
         }
     });
 }
-
 
 pub fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
     let num_blocks = num_bits_arr.len();
@@ -73,7 +80,9 @@ pub fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bit
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
     let mut offset = 0;
     for i in 0..num_blocks {
-        let block = &original_values[i*TBitPacker::BLOCK_LEN..(i+1)*TBitPacker::BLOCK_LEN];
+        let start = i * TBitPacker::BLOCK_LEN;
+        let stop = start + TBitPacker::BLOCK_LEN;
+        let block = &original_values[start..stop];
         let num_bits = TBitPacker::num_bits(block);
         num_bits_vec.push(num_bits);
         TBitPacker::compress(block, &mut compressed[offset..], num_bits);
@@ -90,15 +99,15 @@ pub fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bit
     });
 }
 
-
 pub fn test_suite_compress_decompress<TBitPacker: BitPacker>() {
     let num_blocks = (1 << 15) / TBitPacker::BLOCK_LEN;
     let n = num_blocks * TBitPacker::BLOCK_LEN;
     for num_bits in 0u8..32u8 {
         let original = generate_array(n, num_bits);
         for i in 0..num_blocks {
-            let block = &original[i*TBitPacker::BLOCK_LEN..(i+1)*TBitPacker::BLOCK_LEN];
-            let computed_num_bits = block.iter()
+            let block = &original[i * TBitPacker::BLOCK_LEN..(i + 1) * TBitPacker::BLOCK_LEN];
+            let computed_num_bits = block
+                .iter()
                 .cloned()
                 .map(most_significant_bit)
                 .max()
