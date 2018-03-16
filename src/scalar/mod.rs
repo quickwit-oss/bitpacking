@@ -1,4 +1,7 @@
+const BLOCK_LEN: usize = 32;
+
 type DataType = u32;
+
 
 fn set1(el: i32) -> DataType {
     el as u32
@@ -28,7 +31,9 @@ unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
     *addr = data;
 }
 
-const BLOCK_LEN: usize = 32;
+fn delta(next: DataType, prev: DataType) -> DataType {
+    next - prev
+}
 
 fn or_collapse_to_u32(accumulator: DataType) -> u32 {
     accumulator
