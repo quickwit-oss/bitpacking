@@ -20,8 +20,6 @@ pub use scalar::ScalarBitPacker;
 pub use avxpacking::AVXBitPacker;
 pub use simdcomp::SIMDBitPacker;
 
-
-
 pub trait BitPacker {
     // Integers are compressed in pack of `BLOCK_LEN` `u32`-integers.
     //
@@ -32,9 +30,13 @@ pub trait BitPacker {
     // most significant bit of the largest integer.
     const BLOCK_LEN: usize;
 
+    type DataType;
+
     fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8);
 
-    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8);
+    fn decompress<Output: FnMut(Self::DataType)>(compressed: &[u8], output: Output, num_bits: u8);
+
+    fn decompress_into(compressed: &[u8], decompressed: &mut [u32], num_bits: u8);
 
     fn num_bits(decompressed: &[u32]) -> u8;
 }

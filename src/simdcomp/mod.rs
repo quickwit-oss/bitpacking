@@ -9,7 +9,6 @@ use std::arch::x86_64::_mm_and_si128 as op_and;
 use std::arch::x86_64::_mm_lddqu_si128 as load_unaligned;
 use std::arch::x86_64::_mm_storeu_si128 as store_unaligned;
 
-
 use std::arch::x86_64::{_mm_srli_si128, _mm_sub_epi32, _mm_slli_si128, _mm_cvtsi128_si32};
 
 unsafe fn delta(curr: DataType, prev: DataType) -> DataType {

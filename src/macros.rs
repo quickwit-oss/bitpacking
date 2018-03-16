@@ -70,13 +70,11 @@ macro_rules! pack_unpack_with_bits {
 
 
             #[inline(always)]
-            pub fn unpack(compressed: &[u8], output: &mut [u32]) {
+            pub fn unpack<Output: FnMut(DataType)>(compressed: &[u8], mut output: Output) {
 
                 assert!(compressed.len() >= NUM_BYTES_PER_BLOCK);
-                assert_eq!(output.len(), BLOCK_LEN);
 
                 let mut input_ptr = compressed.as_ptr() as *const DataType;
-                let output_ptr = output.as_mut_ptr()  as *mut DataType;
 
                 let mask_scalar: u32 = ((1u64 << NUM_BITS) - 1u64) as u32;
                 unsafe {
@@ -85,7 +83,7 @@ macro_rules! pack_unpack_with_bits {
                     let mut in_register: DataType = load_unaligned(input_ptr);
 
                     let out_register = op_and(in_register, mask);
-                    store_unaligned(output_ptr, out_register);
+                    output(out_register);
 
                     unroll! {
                         for iter in 0..31 {
@@ -94,22 +92,27 @@ macro_rules! pack_unpack_with_bits {
                             const inner_cursor: usize = (i * NUM_BITS) % 32;
                             const inner_capacity: usize = 32 - inner_cursor;
 
-                            let mut out_register: DataType =
-                                if inner_cursor == 0 {
-                                    op_and(in_register, mask)
-                                } else {
-                                    op_and(right_shift_32(in_register, inner_cursor as i32), mask)
-                                };
+                            // LLVM will not emit the shift operand if
+                            // `inner_cursor` is 0.
+                            let shifted_in_register = right_shift_32(in_register, inner_cursor as i32);
+                            let mut out_register: DataType = op_and(shifted_in_register, mask);
+
+                            // We consumed our current quadruplets entirely.
+                            // We therefore read another one.
                             if inner_capacity <= NUM_BITS && i != 31 {
                                 input_ptr = input_ptr.offset(1);
                                 in_register = load_unaligned(input_ptr);
+
+                                // This quadruplets is actually cutting one of
+                                // our `DataType`. We need to read the next one.
                                 if inner_capacity < NUM_BITS {
                                     let shifted = left_shift_32(in_register, inner_capacity as i32);
                                     let masked = op_and(shifted, mask);
                                     out_register = op_or(out_register, masked);
                                 }
                             }
-                            store_unaligned(output_ptr.offset(i as isize), out_register);
+
+                            output(out_register);
                         }
                     }
                 }
@@ -164,6 +167,8 @@ macro_rules! declare_bitpacker {
 
             const BLOCK_LEN: usize = BLOCK_LEN;
 
+            type DataType = DataType;
+
             fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) {
                 match num_bits {
                     0 => {}
@@ -203,50 +208,65 @@ macro_rules! declare_bitpacker {
                 }
             }
 
-            fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
-                assert_eq!(decompressed.len(), Self::BLOCK_LEN);
-                assert!(compressed.len() >= (num_bits as usize) * Self::BLOCK_LEN / 8);
+            #[inline(always)]
+            fn decompress<Output: FnMut(Self::DataType)>(compressed: &[u8], mut sink: Output, num_bits: u8) {
                 assert!(num_bits <= 32u8);
                 match num_bits {
                     0 => {
-                        for el in decompressed.iter_mut() {
-                            *el = 0u32;
+                        let zero = unsafe { set1(0i32) };
+                        for _ in 0..32 {
+                            sink(zero);
                         }
                     },
-                    1 => pack_unpack_with_bits_1::unpack(compressed, decompressed),
-                    2 => pack_unpack_with_bits_2::unpack(compressed, decompressed),
-                    3 => pack_unpack_with_bits_3::unpack(compressed, decompressed),
-                    4 => pack_unpack_with_bits_4::unpack(compressed, decompressed),
-                    5 => pack_unpack_with_bits_5::unpack(compressed, decompressed),
-                    6 => pack_unpack_with_bits_6::unpack(compressed, decompressed),
-                    7 => pack_unpack_with_bits_7::unpack(compressed, decompressed),
-                    8 => pack_unpack_with_bits_8::unpack(compressed, decompressed),
-                    9 => pack_unpack_with_bits_9::unpack(compressed, decompressed),
-                    10 => pack_unpack_with_bits_10::unpack(compressed, decompressed),
-                    11 => pack_unpack_with_bits_11::unpack(compressed, decompressed),
-                    12 => pack_unpack_with_bits_12::unpack(compressed, decompressed),
-                    13 => pack_unpack_with_bits_13::unpack(compressed, decompressed),
-                    14 => pack_unpack_with_bits_14::unpack(compressed, decompressed),
-                    15 => pack_unpack_with_bits_15::unpack(compressed, decompressed),
-                    16 => pack_unpack_with_bits_16::unpack(compressed, decompressed),
-                    17 => pack_unpack_with_bits_17::unpack(compressed, decompressed),
-                    18 => pack_unpack_with_bits_18::unpack(compressed, decompressed),
-                    19 => pack_unpack_with_bits_19::unpack(compressed, decompressed),
-                    20 => pack_unpack_with_bits_20::unpack(compressed, decompressed),
-                    21 => pack_unpack_with_bits_21::unpack(compressed, decompressed),
-                    22 => pack_unpack_with_bits_22::unpack(compressed, decompressed),
-                    23 => pack_unpack_with_bits_23::unpack(compressed, decompressed),
-                    24 => pack_unpack_with_bits_24::unpack(compressed, decompressed),
-                    25 => pack_unpack_with_bits_25::unpack(compressed, decompressed),
-                    26 => pack_unpack_with_bits_26::unpack(compressed, decompressed),
-                    27 => pack_unpack_with_bits_27::unpack(compressed, decompressed),
-                    28 => pack_unpack_with_bits_28::unpack(compressed, decompressed),
-                    29 => pack_unpack_with_bits_29::unpack(compressed, decompressed),
-                    30 => pack_unpack_with_bits_30::unpack(compressed, decompressed),
-                    31 => pack_unpack_with_bits_31::unpack(compressed, decompressed),
-                    32 => pack_unpack_with_bits_32::unpack(compressed, decompressed),
+                    1 => pack_unpack_with_bits_1::unpack(compressed, sink),
+                    2 => pack_unpack_with_bits_2::unpack(compressed, sink),
+                    3 => pack_unpack_with_bits_3::unpack(compressed, sink),
+                    4 => pack_unpack_with_bits_4::unpack(compressed, sink),
+                    5 => pack_unpack_with_bits_5::unpack(compressed, sink),
+                    6 => pack_unpack_with_bits_6::unpack(compressed, sink),
+                    7 => pack_unpack_with_bits_7::unpack(compressed, sink),
+                    8 => pack_unpack_with_bits_8::unpack(compressed, sink),
+                    9 => pack_unpack_with_bits_9::unpack(compressed, sink),
+                    10 => pack_unpack_with_bits_10::unpack(compressed, sink),
+                    11 => pack_unpack_with_bits_11::unpack(compressed, sink),
+                    12 => pack_unpack_with_bits_12::unpack(compressed, sink),
+                    13 => pack_unpack_with_bits_13::unpack(compressed, sink),
+                    14 => pack_unpack_with_bits_14::unpack(compressed, sink),
+                    15 => pack_unpack_with_bits_15::unpack(compressed, sink),
+                    16 => pack_unpack_with_bits_16::unpack(compressed, sink),
+                    17 => pack_unpack_with_bits_17::unpack(compressed, sink),
+                    18 => pack_unpack_with_bits_18::unpack(compressed, sink),
+                    19 => pack_unpack_with_bits_19::unpack(compressed, sink),
+                    20 => pack_unpack_with_bits_20::unpack(compressed, sink),
+                    21 => pack_unpack_with_bits_21::unpack(compressed, sink),
+                    22 => pack_unpack_with_bits_22::unpack(compressed, sink),
+                    23 => pack_unpack_with_bits_23::unpack(compressed, sink),
+                    24 => pack_unpack_with_bits_24::unpack(compressed, sink),
+                    25 => pack_unpack_with_bits_25::unpack(compressed, sink),
+                    26 => pack_unpack_with_bits_26::unpack(compressed, sink),
+                    27 => pack_unpack_with_bits_27::unpack(compressed, sink),
+                    28 => pack_unpack_with_bits_28::unpack(compressed, sink),
+                    29 => pack_unpack_with_bits_29::unpack(compressed, sink),
+                    30 => pack_unpack_with_bits_30::unpack(compressed, sink),
+                    31 => pack_unpack_with_bits_31::unpack(compressed, sink),
+                    32 => pack_unpack_with_bits_32::unpack(compressed, sink),
                     _ => {}
                 }
+            }
+
+            fn decompress_into(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
+                assert_eq!(
+                    decompressed.len(), Self::BLOCK_LEN,
+                    "The output array is not large enough : ({} < {})",
+                    decompressed.len(), Self::BLOCK_LEN);
+                let mut output_ptr = decompressed.as_mut_ptr()  as *mut DataType;
+                let output = |out_register| {
+                    unsafe {
+                        store_unaligned(output_ptr, out_register);
+                        output_ptr = output_ptr.offset(1);
+                    }
+                };
+                Self::decompress(compressed, output, num_bits);
             }
 
             fn num_bits(decompressed: &[u32]) -> u8 {
@@ -261,6 +281,7 @@ macro_rules! declare_bitpacker {
                 }
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
+
         }
 
 

@@ -25,7 +25,7 @@ fn test_util_compress_decompress<TBitPacker: BitPacker>(original: &[u32], expect
     for &el in &compressed[compressed_len..] {
         assert_eq!(el, 0u8);
     }
-    TBitPacker::decompress(&compressed[..compressed_len], &mut result[..], numbits);
+    TBitPacker::decompress_into(&compressed[..compressed_len], &mut result[..], numbits);
 
     for i in 0..TBitPacker::BLOCK_LEN {
         assert_eq!(
@@ -93,7 +93,7 @@ pub fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bit
         let mut offset = 0;
         for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
-            TBitPacker::decompress(&compressed[offset..], dest_block, num_bits);
+            TBitPacker::decompress_into(&compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
         }
     });
