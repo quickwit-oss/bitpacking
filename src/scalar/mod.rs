@@ -35,10 +35,10 @@ fn or_collapse_to_u32(accumulator: DataType) -> u32 {
     accumulator
 }
 
-fn compute_delta(curr: u32, prev: u32) -> u32 { curr - prev }
+fn compute_delta(curr: u32, prev: u32) -> u32 { curr.wrapping_sub(prev) }
 
 fn integrate_delta(offset: DataType, delta: DataType) -> DataType {
-    offset + delta
+    offset.wrapping_add(delta)
 }
 
 declare_bitpacker!(ScalarBitPacker);
