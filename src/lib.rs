@@ -13,14 +13,15 @@ pub(crate) mod tests;
 mod macros;
 
 mod scalar;
-mod avxpacking;
-mod simdcomp;
+mod sse3;
+//mod avx2;
 
 pub use scalar::ScalarBitPacker;
-pub use avxpacking::AVXBitPacker;
-pub use simdcomp::SIMDBitPacker;
+pub use sse3::SSE3BitPacker;
+//pub use avx2::AVX2BitPacker;
 
 pub trait BitPacker {
+
     // Integers are compressed in pack of `BLOCK_LEN` `u32`-integers.
     //
     // `BLOCK_LEN` is required to be a power of 2, greater than 8.
@@ -34,11 +35,23 @@ pub trait BitPacker {
 
     fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8);
 
-    fn decompress<Output: FnMut(Self::DataType)>(compressed: &[u8], output: Output, num_bits: u8);
+    fn compress_delta(initial: u32,
+                      decompressed: &[u32],
+                      compressed: &mut [u8],
+                      num_bits: u8);
 
-    fn decompress_into(compressed: &[u8], decompressed: &mut [u32], num_bits: u8);
+    fn decompress_to<Output: FnMut(Self::DataType)>(compressed: &[u8], output: Output, num_bits: u8);
+
+    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8);
+
+    fn decompress_delta(initial: u32,
+                        compressed: &[u8],
+                        decompressed: &mut [u32],
+                        num_bits: u8);
 
     fn num_bits(decompressed: &[u32]) -> u8;
+
+    fn num_bits_delta(initial: u32, decompressed: &[u32]) -> u8;
 }
 
 /// Returns the most significant bit.

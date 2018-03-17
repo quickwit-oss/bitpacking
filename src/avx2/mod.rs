@@ -25,4 +25,4 @@ fn or_collapse_to_u32(accumulator: DataType) -> u32 {
     }
 }
 
-declare_bitpacker!(AVXBitPacker);
+declare_bitpacker!(AVX2BitPacker);

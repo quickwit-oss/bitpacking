@@ -31,12 +31,14 @@ unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
     *addr = data;
 }
 
-fn delta(next: DataType, prev: DataType) -> DataType {
-    next - prev
-}
-
 fn or_collapse_to_u32(accumulator: DataType) -> u32 {
     accumulator
+}
+
+fn compute_delta(curr: u32, prev: u32) -> u32 { curr - prev }
+
+fn integrate_delta(offset: DataType, delta: DataType) -> DataType {
+    offset + delta
 }
 
 declare_bitpacker!(ScalarBitPacker);

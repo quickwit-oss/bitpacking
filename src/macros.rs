@@ -17,7 +17,7 @@ macro_rules! pack_unpack_with_bits {
             const NUM_BYTES_PER_BLOCK: usize = NUM_BITS * super::BLOCK_LEN / 8;
 
             #[inline(always)]
-            pub fn pack(input_arr: &[u32], output_arr: &mut [u8]) {
+            pub fn pack<Delta: FnMut(DataType) -> DataType>(input_arr: &[u32], output_arr: &mut [u8], mut delta_computer: Delta) {
 
                 assert_eq!(input_arr.len(), BLOCK_LEN);
                 assert!(output_arr.len() >= NUM_BYTES_PER_BLOCK);
@@ -26,7 +26,7 @@ macro_rules! pack_unpack_with_bits {
                 let mut output_ptr = output_arr.as_mut_ptr() as *mut DataType;
 
                 unsafe {
-                    let mut out_register: DataType = load_unaligned(input_ptr);
+                    let mut out_register: DataType = delta_computer(load_unaligned(input_ptr));
 
                     unroll! {
                         for iter in 0..30 {
@@ -37,7 +37,7 @@ macro_rules! pack_unpack_with_bits {
                             const remaining: usize = 32 - inner_cursor;
 
                             let offset_ptr = input_ptr.offset(i as isize);
-                            let in_register: DataType = load_unaligned(offset_ptr);
+                            let in_register: DataType = delta_computer(load_unaligned(offset_ptr));
 
                             out_register =
                                 if inner_cursor > 0 {
@@ -56,7 +56,7 @@ macro_rules! pack_unpack_with_bits {
                             }
                         }
                     }
-                    let in_register: DataType = load_unaligned(input_ptr.offset(31 as isize));
+                    let in_register: DataType = delta_computer(load_unaligned(input_ptr.offset(31 as isize)));
                     out_register =
                         if NUM_BITS != 32 {
                             let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
@@ -163,6 +163,48 @@ macro_rules! declare_bitpacker {
 
         pub struct $bitpacker_name;
 
+        impl $bitpacker_name {
+
+            fn compress_generic<Delta: FnMut(DataType) -> DataType>(decompressed: &[u32], compressed: &mut [u8], num_bits: u8, delta_computer: Delta) {
+                match num_bits {
+                    0 => {}
+                    1 => pack_unpack_with_bits_1::pack(decompressed, compressed, delta_computer),
+                    2 => pack_unpack_with_bits_2::pack(decompressed, compressed, delta_computer),
+                    3 => pack_unpack_with_bits_3::pack(decompressed, compressed, delta_computer),
+                    4 => pack_unpack_with_bits_4::pack(decompressed, compressed, delta_computer),
+                    5 => pack_unpack_with_bits_5::pack(decompressed, compressed, delta_computer),
+                    6 => pack_unpack_with_bits_6::pack(decompressed, compressed, delta_computer),
+                    7 => pack_unpack_with_bits_7::pack(decompressed, compressed, delta_computer),
+                    8 => pack_unpack_with_bits_8::pack(decompressed, compressed, delta_computer),
+                    9 => pack_unpack_with_bits_9::pack(decompressed, compressed, delta_computer),
+                    10 => pack_unpack_with_bits_10::pack(decompressed, compressed, delta_computer),
+                    11 => pack_unpack_with_bits_11::pack(decompressed, compressed, delta_computer),
+                    12 => pack_unpack_with_bits_12::pack(decompressed, compressed, delta_computer),
+                    13 => pack_unpack_with_bits_13::pack(decompressed, compressed, delta_computer),
+                    14 => pack_unpack_with_bits_14::pack(decompressed, compressed, delta_computer),
+                    15 => pack_unpack_with_bits_15::pack(decompressed, compressed, delta_computer),
+                    16 => pack_unpack_with_bits_16::pack(decompressed, compressed, delta_computer),
+                    17 => pack_unpack_with_bits_17::pack(decompressed, compressed, delta_computer),
+                    18 => pack_unpack_with_bits_18::pack(decompressed, compressed, delta_computer),
+                    19 => pack_unpack_with_bits_19::pack(decompressed, compressed, delta_computer),
+                    20 => pack_unpack_with_bits_20::pack(decompressed, compressed, delta_computer),
+                    21 => pack_unpack_with_bits_21::pack(decompressed, compressed, delta_computer),
+                    22 => pack_unpack_with_bits_22::pack(decompressed, compressed, delta_computer),
+                    23 => pack_unpack_with_bits_23::pack(decompressed, compressed, delta_computer),
+                    24 => pack_unpack_with_bits_24::pack(decompressed, compressed, delta_computer),
+                    25 => pack_unpack_with_bits_25::pack(decompressed, compressed, delta_computer),
+                    26 => pack_unpack_with_bits_26::pack(decompressed, compressed, delta_computer),
+                    27 => pack_unpack_with_bits_27::pack(decompressed, compressed, delta_computer),
+                    28 => pack_unpack_with_bits_28::pack(decompressed, compressed, delta_computer),
+                    29 => pack_unpack_with_bits_29::pack(decompressed, compressed, delta_computer),
+                    30 => pack_unpack_with_bits_30::pack(decompressed, compressed, delta_computer),
+                    31 => pack_unpack_with_bits_31::pack(decompressed, compressed, delta_computer),
+                    32 => pack_unpack_with_bits_32::pack(decompressed, compressed, delta_computer),
+                _ => {}
+                }
+            }
+        }
+
         impl BitPacker for $bitpacker_name {
 
             const BLOCK_LEN: usize = BLOCK_LEN;
@@ -170,46 +212,34 @@ macro_rules! declare_bitpacker {
             type DataType = DataType;
 
             fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) {
-                match num_bits {
-                    0 => {}
-                    1 => pack_unpack_with_bits_1::pack(decompressed, compressed),
-                    2 => pack_unpack_with_bits_2::pack(decompressed, compressed),
-                    3 => pack_unpack_with_bits_3::pack(decompressed, compressed),
-                    4 => pack_unpack_with_bits_4::pack(decompressed, compressed),
-                    5 => pack_unpack_with_bits_5::pack(decompressed, compressed),
-                    6 => pack_unpack_with_bits_6::pack(decompressed, compressed),
-                    7 => pack_unpack_with_bits_7::pack(decompressed, compressed),
-                    8 => pack_unpack_with_bits_8::pack(decompressed, compressed),
-                    9 => pack_unpack_with_bits_9::pack(decompressed, compressed),
-                    10 => pack_unpack_with_bits_10::pack(decompressed, compressed),
-                    11 => pack_unpack_with_bits_11::pack(decompressed, compressed),
-                    12 => pack_unpack_with_bits_12::pack(decompressed, compressed),
-                    13 => pack_unpack_with_bits_13::pack(decompressed, compressed),
-                    14 => pack_unpack_with_bits_14::pack(decompressed, compressed),
-                    15 => pack_unpack_with_bits_15::pack(decompressed, compressed),
-                    16 => pack_unpack_with_bits_16::pack(decompressed, compressed),
-                    17 => pack_unpack_with_bits_17::pack(decompressed, compressed),
-                    18 => pack_unpack_with_bits_18::pack(decompressed, compressed),
-                    19 => pack_unpack_with_bits_19::pack(decompressed, compressed),
-                    20 => pack_unpack_with_bits_20::pack(decompressed, compressed),
-                    21 => pack_unpack_with_bits_21::pack(decompressed, compressed),
-                    22 => pack_unpack_with_bits_22::pack(decompressed, compressed),
-                    23 => pack_unpack_with_bits_23::pack(decompressed, compressed),
-                    24 => pack_unpack_with_bits_24::pack(decompressed, compressed),
-                    25 => pack_unpack_with_bits_25::pack(decompressed, compressed),
-                    26 => pack_unpack_with_bits_26::pack(decompressed, compressed),
-                    27 => pack_unpack_with_bits_27::pack(decompressed, compressed),
-                    28 => pack_unpack_with_bits_28::pack(decompressed, compressed),
-                    29 => pack_unpack_with_bits_29::pack(decompressed, compressed),
-                    30 => pack_unpack_with_bits_30::pack(decompressed, compressed),
-                    31 => pack_unpack_with_bits_31::pack(decompressed, compressed),
-                    32 => pack_unpack_with_bits_32::pack(decompressed, compressed),
-                _ => {}
-                }
+                let no_delta = |curr| { curr };
+                Self::compress_generic(
+                    decompressed,
+                    compressed,
+                    num_bits,
+                    no_delta);
+            }
+
+            fn compress_delta(initial: u32,
+                      decompressed: &[u32],
+                      compressed: &mut [u8],
+                      num_bits: u8) {
+
+                let mut previous = unsafe { set1(initial as i32) };
+                let delta_computer = |current: Self::DataType| {
+                    let result = compute_delta(current, previous);
+                    previous = current;
+                    result
+                };
+                Self::compress_generic(
+                    decompressed,
+                    compressed,
+                    num_bits,
+                    delta_computer);
             }
 
             #[inline(always)]
-            fn decompress<Output: FnMut(Self::DataType)>(compressed: &[u8], mut sink: Output, num_bits: u8) {
+            fn decompress_to<Output: FnMut(Self::DataType)>(compressed: &[u8], mut sink: Output, num_bits: u8) {
                 assert!(num_bits <= 32u8);
                 match num_bits {
                     0 => {
@@ -254,7 +284,7 @@ macro_rules! declare_bitpacker {
                 }
             }
 
-            fn decompress_into(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
+            fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
                 assert_eq!(
                     decompressed.len(), Self::BLOCK_LEN,
                     "The output array is not large enough : ({} < {})",
@@ -266,7 +296,29 @@ macro_rules! declare_bitpacker {
                         output_ptr = output_ptr.offset(1);
                     }
                 };
-                Self::decompress(compressed, output, num_bits);
+                Self::decompress_to(compressed, output, num_bits);
+            }
+
+            fn decompress_delta(
+                initial: u32,
+                compressed: &[u8],
+                decompressed: &mut [u32],
+                num_bits: u8)
+            {
+                unsafe {
+                    let mut current = set1(initial as i32);
+                    assert_eq!(
+                        decompressed.len(), Self::BLOCK_LEN,
+                        "The output array is not large enough : ({} < {})",
+                        decompressed.len(), Self::BLOCK_LEN);
+                    let mut output_ptr = decompressed.as_mut_ptr()  as *mut DataType;
+                    let output = |delta| {
+                        current = integrate_delta(current, delta);
+                        store_unaligned(output_ptr, current);
+                        output_ptr = output_ptr.offset(1);
+                    };
+                    Self::decompress_to(compressed, output, num_bits);
+                }
             }
 
             fn num_bits(decompressed: &[u32]) -> u8 {
@@ -282,6 +334,29 @@ macro_rules! declare_bitpacker {
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
 
+            fn num_bits_delta(initial: u32, decompressed: &[u32]) -> u8 {
+                let initial_vec = unsafe { set1(initial as i32) };
+                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+
+                let first = unsafe { load_unaligned(data) };
+                let mut accumulator = unsafe { compute_delta(load_unaligned(data), initial_vec) };
+                let mut previous = first;
+
+                unroll! {
+                    for iter in 0..30 {
+                        let i = iter + 1;
+                        let current = unsafe { load_unaligned(data.offset(i as isize)) };
+                        let delta = unsafe { compute_delta(current, previous) };
+                        accumulator =  unsafe { op_or(accumulator, delta) };
+                        previous = current;
+                    }
+                }
+                let current = unsafe { load_unaligned(data.offset(31 as isize)) };
+                let delta = unsafe { compute_delta(current, previous) };
+                accumulator =  unsafe { op_or(accumulator, delta) };
+                most_significant_bit(or_collapse_to_u32(accumulator))
+            }
+
         }
 
 
@@ -292,8 +367,14 @@ macro_rules! declare_bitpacker {
 
             #[test]
             fn test_bitpacker() {
-                test_suite_compress_decompress::<$bitpacker_name>()
+                test_suite_compress_decompress::<$bitpacker_name>(false);
             }
+
+            #[test]
+            fn test_bitpacker_delta() {
+                test_suite_compress_decompress::<$bitpacker_name>(true);
+            }
+
 
             bench_suite!($bitpacker_name);
         }
