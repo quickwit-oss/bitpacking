@@ -1,4 +1,4 @@
-const BLOCK_LEN: usize = 128;
+const NUM_INTS_PER_REGISTER: usize = 4;
 
 use std::arch::x86_64::__m128i as DataType;
 use std::arch::x86_64::_mm_set1_epi32 as set1;

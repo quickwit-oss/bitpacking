@@ -61,16 +61,16 @@ fn test_util_compress_decompress_delta<TBitPacker: BitPacker>(data: &[u32], expe
         let mut result = vec![0u32; TBitPacker::BLOCK_LEN as usize];
 
 
-        let numbits = TBitPacker::num_bits_delta(initial, &original[..]);
+        let numbits = TBitPacker::num_bits_sorted(initial, &original[..]);
         assert_eq!(numbits, expected_num_bits, "Failed identifying max bits. Initial {}. Shifted data {:?}", initial, &original[..5]);
-        TBitPacker::compress_delta(initial, &original[..], &mut compressed[..], numbits);
+        TBitPacker::compress_sorted(initial, &original[..], &mut compressed[..], numbits);
 
         let compressed_len = (numbits as usize) * TBitPacker::BLOCK_LEN / 8;
         for &el in &compressed[compressed_len..] {
             assert_eq!(el, 0u8);
         }
 
-        TBitPacker::decompress_delta(initial, &compressed[..compressed_len], &mut result[..], numbits);
+        TBitPacker::decompress_sorted(initial, &compressed[..compressed_len], &mut result[..], numbits);
 
         for i in 0..TBitPacker::BLOCK_LEN {
             assert_eq!(
@@ -151,7 +151,7 @@ pub fn bench_compress_delta_util<TBitPacker: BitPacker>(bench: &mut Bencher, num
             let num_bits = TBitPacker::num_bits(block);
             let stride = TBitPacker::BLOCK_LEN * (num_bits as usize) / 8;
             num_bits_vec.push(num_bits);
-            TBitPacker::compress_delta(3u32, block, &mut compress[offset..], num_bits);
+            TBitPacker::compress_sorted(3u32, block, &mut compress[offset..], num_bits);
             offset += stride;
         }
     });

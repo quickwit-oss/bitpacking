@@ -1,4 +1,4 @@
-const BLOCK_LEN: usize = 32;
+const NUM_INTS_PER_REGISTER: usize = 1;
 
 type DataType = u32;
 

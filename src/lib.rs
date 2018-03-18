@@ -22,6 +22,8 @@ pub use sse3::SSE3BitPacker;
 
 
 ///
+/// # Example
+///
 /// ```
 /// extern crate bitpacking;
 ///
@@ -36,7 +38,7 @@ pub use sse3::SSE3BitPacker;
 ///     8, 8, 10, 5, 13, 8, 11, 14, 7, 14, 4, 2, 9, 12, 14, 5, 15, 12, 0,
 ///     12, 13, 3, 13, 5, 4, 15, 9, 8, 9, 3, 3, 3, 1, 12, 0, 6, 11, 11, 12, 4];
 /// let num_bits: u8 = SSE3BitPacker::num_bits(&fake_data);
-/// assert_eq!(num_bits, 4);
+/// # assert_eq!(num_bits, 4);
 /// let mut compressed = vec![0u8; (num_bits as usize) * SSE3BitPacker::BLOCK_LEN / 8];
 /// SSE3BitPacker::compress(&fake_data, &mut compressed[..], num_bits);
 ///
@@ -62,23 +64,23 @@ pub trait BitPacker {
 
     fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8);
 
-    fn compress_delta(initial: u32,
-                      decompressed: &[u32],
-                      compressed: &mut [u8],
-                      num_bits: u8);
+    fn compress_sorted(initial: u32,
+                       decompressed: &[u32],
+                       compressed: &mut [u8],
+                       num_bits: u8);
 
     fn decompress_to<Output: FnMut(Self::DataType)>(compressed: &[u8], output: Output, num_bits: u8);
 
     fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8);
 
-    fn decompress_delta(initial: u32,
-                        compressed: &[u8],
-                        decompressed: &mut [u32],
-                        num_bits: u8);
+    fn decompress_sorted(initial: u32,
+                         compressed: &[u8],
+                         decompressed: &mut [u32],
+                         num_bits: u8);
 
     fn num_bits(decompressed: &[u32]) -> u8;
 
-    fn num_bits_delta(initial: u32, decompressed: &[u32]) -> u8;
+    fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
 }
 
 /// Returns the most significant bit.

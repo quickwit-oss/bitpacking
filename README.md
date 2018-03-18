@@ -45,13 +45,27 @@ Currently the following are available :
 - AVX
 
 
+
+# Compressing
+
+
 ```rust
-// Compressing
+extern crate bitpacking;
+use bitpacking::{SSE3BitPacker, BitPacker};
+
+// ...
 let num_bits: u8 = SSE3BitPacker::num_bits(&fake_data);
 let mut compressed = vec![0u8; (num_bits as usize) * SSE3BitPacker::BLOCK_LEN / 8];
 SSE3BitPacker::compress(&fake_data, &mut compressed[..], num_bits);
+```
 
-// Decompressing
+# Decompressing
+
+```rust
+extern crate bitpacking;
+use bitpacking::{SSE3BitPacker, BitPacker};
+
+// ...
 let mut decompressed = vec![0u32; SSE3BitPacker::BLOCK_LEN];
 SSE3BitPacker::decompress(&compressed, &mut decompressed[..], num_bits);
 

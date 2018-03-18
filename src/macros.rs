@@ -18,9 +18,8 @@ macro_rules! pack_unpack_with_bits {
 
             #[inline(always)]
             pub fn pack<Delta: FnMut(DataType) -> DataType>(input_arr: &[u32], output_arr: &mut [u8], mut delta_computer: Delta) {
-
-                assert_eq!(input_arr.len(), BLOCK_LEN);
-                assert!(output_arr.len() >= NUM_BYTES_PER_BLOCK);
+                assert_eq!(input_arr.len(), BLOCK_LEN, "Input block too small {}, (expected {})", input_arr.len(), BLOCK_LEN);
+                assert!(output_arr.len() >= NUM_BYTES_PER_BLOCK, "Output array too small (numbits {}). {} <= {}", NUM_BITS, output_arr.len(), NUM_BYTES_PER_BLOCK);
 
                 let input_ptr = input_arr.as_ptr() as *const DataType;
                 let mut output_ptr = output_arr.as_mut_ptr() as *mut DataType;
@@ -72,7 +71,7 @@ macro_rules! pack_unpack_with_bits {
             #[inline(always)]
             pub fn unpack<Output: FnMut(DataType)>(compressed: &[u8], mut output: Output) {
 
-                assert!(compressed.len() >= NUM_BYTES_PER_BLOCK);
+                assert!(compressed.len() >= NUM_BYTES_PER_BLOCK, "Compressed array seems too small. ({} < {}) ", compressed.len(), NUM_BYTES_PER_BLOCK);
 
                 let mut input_ptr = compressed.as_ptr() as *const DataType;
 
@@ -127,6 +126,8 @@ macro_rules! declare_bitpacker {
 
         use super::BitPacker;
         use super::most_significant_bit;
+
+        const BLOCK_LEN: usize = NUM_INTS_PER_REGISTER * 32;
 
         pack_unpack_with_bits!(pack_unpack_with_bits_1, 1);
         pack_unpack_with_bits!(pack_unpack_with_bits_2, 2);
@@ -220,7 +221,7 @@ macro_rules! declare_bitpacker {
                     no_delta);
             }
 
-            fn compress_delta(initial: u32,
+            fn compress_sorted(initial: u32,
                       decompressed: &[u32],
                       compressed: &mut [u8],
                       num_bits: u8) {
@@ -240,7 +241,7 @@ macro_rules! declare_bitpacker {
 
             #[inline(always)]
             fn decompress_to<Output: FnMut(Self::DataType)>(compressed: &[u8], mut sink: Output, num_bits: u8) {
-                assert!(num_bits <= 32u8);
+                assert!(num_bits <= 32u8, "Num bits must be <= 32. Was {}.", num_bits);
                 match num_bits {
                     0 => {
                         let zero = unsafe { set1(0i32) };
@@ -285,9 +286,9 @@ macro_rules! declare_bitpacker {
             }
 
             fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) {
-                assert_eq!(
-                    decompressed.len(), Self::BLOCK_LEN,
-                    "The output array is not large enough : ({} < {})",
+                assert!(
+                    decompressed.len() >= Self::BLOCK_LEN,
+                    "The output array is not large enough : ({} >= {})",
                     decompressed.len(), Self::BLOCK_LEN);
                 let mut output_ptr = decompressed.as_mut_ptr()  as *mut DataType;
                 let output = |out_register| {
@@ -299,7 +300,7 @@ macro_rules! declare_bitpacker {
                 Self::decompress_to(compressed, output, num_bits);
             }
 
-            fn decompress_delta(
+            fn decompress_sorted(
                 initial: u32,
                 compressed: &[u8],
                 decompressed: &mut [u32],
@@ -307,9 +308,9 @@ macro_rules! declare_bitpacker {
             {
                 unsafe {
                     let mut current = set1(initial as i32);
-                    assert_eq!(
-                        decompressed.len(), Self::BLOCK_LEN,
-                        "The output array is not large enough : ({} < {})",
+                    assert!(
+                        decompressed.len() >= Self::BLOCK_LEN,
+                        "The output array is not large enough : ({} >= {})",
                         decompressed.len(), Self::BLOCK_LEN);
                     let mut output_ptr = decompressed.as_mut_ptr()  as *mut DataType;
                     let output = |delta| {
@@ -322,6 +323,7 @@ macro_rules! declare_bitpacker {
             }
 
             fn num_bits(decompressed: &[u32]) -> u8 {
+                assert_eq!(decompressed.len(), BLOCK_LEN, "`decompressed`'s len is not `BLOCK_LEN={}`", BLOCK_LEN);
                 let data: *const DataType = decompressed.as_ptr() as *const DataType;
                 let mut accumulator = unsafe { load_unaligned(data) };
                 unroll! {
@@ -334,7 +336,7 @@ macro_rules! declare_bitpacker {
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
 
-            fn num_bits_delta(initial: u32, decompressed: &[u32]) -> u8 {
+            fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
                 let initial_vec = unsafe { set1(initial as i32) };
                 let data: *const DataType = decompressed.as_ptr() as *const DataType;
 
