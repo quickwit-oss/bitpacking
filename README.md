@@ -16,13 +16,13 @@ Compressing increasing integers can also be reduced to compressing
 small integer via delta-encoding : instead of encoding the values
  themselves, one encodes the gaps between consecutive values.
 
-Traditional compression scheme like LZ4 is really suited to address this problem efficiently.
+Traditional compression schemes like LZ4 aren't really suited to address this problem efficiently.
 Instead, there are different families of solutions to this problem.
 
-One of the most straightforward and efficient one is `bitpacking` :
+One of the most straightforward and efficient ones is `bitpacking` :
 - Integers are first grouped into blocks of constant size (e.g. `128` when using the SSE2 implementation).
 - If not available implicitely, compute the minimum number of bits `b` that makes it possible to represent all of the integers.
-In other words, the smallest `b` such that all integers in the block are stricly smaller than 2<sup>n</sup>.
+In other words, the smallest `b` such that all integers in the block are stricly smaller than 2<sup>/<sup>.
 - The bitpacked representation is then some variation of the concatenation of the integers restricted to their least significant `b`-bits.
 
 For instance, assuming a block of `4`, when encoding `4, 9, 3, 2`. Assuming that the highest value in the block is 9, `b = 4`. All values will then be encoded over 4 bits as follows.
@@ -42,12 +42,12 @@ As a result, each integer of this block will only require 4 bits.
 
 # Usage
 
-This crate contains different implementation for bitpacking depending on the instruction set available with your processor.
-**The resulting format are not compatible one with each other.**
+This crate contains different implementations for bitpacking depending on the instruction set available with your processor.
+**The resulting formats are not compatible one with each other.**
 
 Currently the following are available :
 - scalar: implementation not using any SIMD instruction. A block has a size of 32.
-This implementation is still more performant naive solutions.
+This implementation is still more performant than naive solutions.
 - SSE3: bitpacking 4 integer at once. (block size of 128). *Requires the sse3 feature to be enabled. This feature is enabled by default.*
 - AVX: butpacking 8 integers at once. (block size of 256). *Delta integration is comparatively expensive*. Requires to
 enable the avx feature.
