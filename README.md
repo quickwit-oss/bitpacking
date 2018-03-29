@@ -22,7 +22,8 @@ Instead, there are different families of solutions to this problem.
 One of the most straightforward and efficient ones is `bitpacking` :
 - Integers are first grouped into blocks of constant size (e.g. `128` when using the SSE2 implementation).
 - If not available implicitely, compute the minimum number of bits `b` that makes it possible to represent all of the integers.
-In other words, the smallest `b` such that all integers in the block are stricly smaller than 2ⁿ.
+In other words, the smallest `b` such that all integers in the block are stricly smaller than 2<sup>b</sup>.
+
 - The bitpacked representation is then some variation of the concatenation of the integers restricted to their least significant `b`-bits.
 
 For instance, assuming a block of `4`, when encoding `4, 9, 3, 2`. Assuming that the highest value in the block is 9, `b = 4`. All values will then be encoded over 4 bits as follows.
