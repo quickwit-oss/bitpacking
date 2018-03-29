@@ -49,7 +49,7 @@ Currently the following are available :
 - scalar: implementation not using any SIMD instruction. A block has a size of 32.
 This implementation is still more performant than naive solutions.
 - SSE3: bitpacking 4 integer at once. (block size of 128). *Requires the sse3 feature to be enabled. This feature is enabled by default.*
-- AVX: butpacking 8 integers at once. (block size of 256). *Delta integration is comparatively expensive*. Requires to
+- AVX: bitpacking 8 integers at once. (block size of 256). *Delta integration is comparatively expensive*. Requires to
 enable the avx feature.
 
 I recommend using the SSE3 implementation if you are not sure what you are doing and you are targetting x86_64 CPUs that have been produced after 2006.
