@@ -55,11 +55,42 @@ assert_eq!((num_bits as usize) *  SSE3BitPacker::BLOCK_LEN / 8, compressed_len);
 
 // Decompressing
 let mut decompressed = vec![0u32; SSE3BitPacker::BLOCK_LEN];
-SSE3BitPacker::decompress(&compressed, &mut decompressed[..], num_bits);
+SSE3BitPacker::decompress(&compressed[..compressed_len], &mut decompressed[..], num_bits);
 
 assert_eq!(&my_data, &decompressed);
+
 # }
 ```
+
+
+# Examples with delta-encoding
+```
+extern crate bitpacking;
+
+use bitpacking::{SSE3BitPacker, BitPacker};
+
+# fn main() {
+# let sorted_array = (17..145).collect();
+let num_bits: u8 = SSE3BitPacker::num_bits_sorted(16u32, &my_data);
+
+// A block will be take at most 4 bytes per-integers.
+let mut compressed = vec![0u8; 4 * SSE3BitPacker::BLOCK_LEN];
+
+# assert_eq!(num_bits, 4);
+let compressed_len = SSE3BitPacker::compress_sorted(&sorted_array, &mut compressed[..], num_bits);
+
+assert_eq!((num_bits as usize) *  SSE3BitPacker::BLOCK_LEN / 8, compressed_len);
+
+// Decompressing
+let mut decompressed = vec![0u32; SSE3BitPacker::BLOCK_LEN];
+SSE3BitPacker::decompress(17, &compressed[..compressed_len], &mut decompressed[..], num_bits);
+
+assert_eq!(&sorted_array, &decompressed);
+
+# }
+```
+
+
 */
 
 
