@@ -12,13 +12,19 @@ pub(crate) mod tests;
 #[macro_use]
 mod macros;
 
-mod scalar;
-mod sse3;
-//mod avx2;
 
+mod scalar;
 pub use scalar::ScalarBitPacker;
+
+#[cfg(feature = "sse3")]
+mod sse3;
+#[cfg(feature = "sse3")]
 pub use sse3::SSE3BitPacker;
-//pub use avx2::AVX2BitPacker;
+
+#[cfg(feature = "avx2")]
+mod avx2;
+#[cfg(feature = "avx2")]
+pub use avx2::AVX2BitPacker;
 
 
 ///
@@ -81,6 +87,10 @@ pub trait BitPacker {
     fn num_bits(decompressed: &[u32]) -> u8;
 
     fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
+
+    fn compressed_block_size(num_bits: u8) -> usize {
+        Self::BLOCK_LEN * ( num_bits as usize) / 8
+    }
 }
 
 /// Returns the most significant bit.

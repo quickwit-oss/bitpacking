@@ -12,3 +12,8 @@ crunchy = "0.1.6"
 
 [dev-dependencies]
 rand = "0.3"
+
+[features]
+default = ["sse3"]
+sse3 = []
+avx2 = []
