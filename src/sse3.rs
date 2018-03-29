@@ -46,7 +46,7 @@ fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
 }
 
 
-declare_bitpacker!(SSE3BitPacker);
+declare_bitpacker!(SSE3BitPacker, 128);
 
 
 

@@ -41,4 +41,4 @@ fn integrate_delta(offset: DataType, delta: DataType) -> DataType {
     offset.wrapping_add(delta)
 }
 
-declare_bitpacker!(ScalarBitPacker);
+declare_bitpacker!(ScalarBitPacker, 32);

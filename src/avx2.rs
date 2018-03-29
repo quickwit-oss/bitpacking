@@ -55,4 +55,4 @@ fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
     }
 }
 
-declare_bitpacker!(AVX2BitPacker);
+declare_bitpacker!(AVX2BitPacker, 256);
