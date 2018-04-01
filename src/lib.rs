@@ -97,6 +97,7 @@ assert_eq!(&sorted_array, &decompressed);
 #![allow(unused_unsafe)]
 #![feature(stdsimd)]
 #![feature(test)]
+#![feature(target_feature)]
 
 #[macro_use]
 extern crate crunchy;
@@ -122,8 +123,9 @@ mod avx2;
 #[cfg(feature = "avx2")]
 pub use avx2::AVX2BitPacker;
 
+use std::marker::Sized;
 
-pub trait BitPacker {
+pub trait BitPacker: Sized {
 
     /// Integers are compressed in pack of `BLOCK_LEN` `u32`-integers.
     ///
@@ -137,6 +139,7 @@ pub trait BitPacker {
     /// Type of the register used by the `BitPacker`.
     type DataType;
 
+    fn acquire() -> Option<Self>;
 
     /// Compress a block of `u32`
     ///
@@ -149,7 +152,7 @@ pub trait BitPacker {
     ///
     /// Panics if the compressed destination array is assumed to be large enough.
     /// Panics if `decompressed` length is not exactly the `BLOCK_LEN`.
-    fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
+    fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
 
     /// Delta encode and compressed the `decompressed` array.
     ///
@@ -162,50 +165,50 @@ pub trait BitPacker {
     ///
     /// Panics if the compressed array is too short.
     /// Panics if the decompressed array is not exactly the `BLOCK_LEN`.
-    fn compress_sorted(initial: u32,
+    fn compress_sorted(&self, initial: u32,
                        decompressed: &[u32],
                        compressed: &mut [u8],
                        num_bits: u8) -> usize;
 
     /// Decompresses the `compressed` array and streams registers full of `u32`
     /// to the output functions.
-    fn decompress_to<Output: FnMut(Self::DataType)>(compressed: &[u8], output: Output, num_bits: u8) -> usize;
+    //unsafe fn decompress_to<Output: Sink<Self::DataType> >(&self, compressed: &[u8], output: Output, num_bits: u8) -> usize;
 
-    // Decompress the `compress` array to the `decompressed` array.
-    //
-    // Returns the amount of bytes that were consumed.
-    //
-    // # Panics
-    //
-    // Panics if the compressed array is too short, or the decompressed array is too short.
-    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
+    /// Decompress the `compress` array to the `decompressed` array.
+    ///
+    /// Returns the amount of bytes that were consumed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the compressed array is too short, or the decompressed array is too short.
+    fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
 
 
-    // Decompress the`compress`array to the `decompressed` array.
-    // The `compressed` array is assumed to have been delta-encoded and compressed.
-    //
-    // `initial` contains the previous used to delta-decode the first element.
-    //
-    // Returns the amount of bytes that were consumed.
-    //
-    // # Panics
-    //
-    // Panics if the compressed array is too short, or the decompressed array is too short.
-    fn decompress_sorted(initial: u32,
+    /// Decompress the`compress`array to the `decompressed` array.
+    /// The `compressed` array is assumed to have been delta-encoded and compressed.
+    ///
+    /// `initial` contains the previous used to delta-decode the first element.
+    ///
+    /// Returns the amount of bytes that were consumed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the compressed array is too short, or the decompressed array is too short.
+    fn decompress_sorted(&self, initial: u32,
                          compressed: &[u8],
                          decompressed: &mut [u32],
                          num_bits: u8) -> usize;
 
     /// Returns the minimum number of bits used to represent all integers in the
     /// `decompressed` array.
-    fn num_bits(decompressed: &[u32]) -> u8;
+    fn num_bits(&self, decompressed: &[u32]) -> u8;
 
     /// Returns the minimum number of bits used to represent all the deltas in the
     /// `decompressed` array.
-    fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
+    fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8;
 
     /// Returns the size of a compressed block.
-    fn compressed_block_size(num_bits: u8) -> usize {
+    fn compressed_block_size(&self, num_bits: u8) -> usize {
         Self::BLOCK_LEN * ( num_bits as usize) / 8
     }
 }

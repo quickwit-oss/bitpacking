@@ -41,4 +41,9 @@ fn integrate_delta(offset: DataType, delta: DataType) -> DataType {
     offset.wrapping_add(delta)
 }
 
-declare_bitpacker!(ScalarBitPacker, 32);
+
+// The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.
+//
+// For other bitpacker, we enable specific CPU instruction set, but for the
+// scalar bitpacker none is required.
+declare_bitpacker!(ScalarBitPacker, 32, cfg(any(debug, not(debug))) );
