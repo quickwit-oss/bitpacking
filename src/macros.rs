@@ -122,9 +122,8 @@ macro_rules! pack_unpack_with_bits {
 }
 
 macro_rules! declare_bitpacker {
-
     ($cpufeature:meta) => {
-
+        use super::super::UnsafeBitPacker;
         use most_significant_bit;
 
         pack_unpack_with_bits!(pack_unpack_with_bits_1, 1, $cpufeature);
@@ -160,9 +159,14 @@ macro_rules! declare_bitpacker {
         pack_unpack_with_bits!(pack_unpack_with_bits_31, 31, $cpufeature);
         pack_unpack_with_bits!(pack_unpack_with_bits_32, 32, $cpufeature);
 
-        unsafe fn compress_generic<DeltaComputer: Transformer>(decompressed: &[u32], compressed: &mut [u8], num_bits: u8, delta_computer: DeltaComputer) -> usize {
+        unsafe fn compress_generic<DeltaComputer: Transformer>(
+            decompressed: &[u32],
+            compressed: &mut [u8],
+            num_bits: u8,
+            delta_computer: DeltaComputer,
+        ) -> usize {
             match num_bits {
-                0 => { 0 }
+                0 => 0,
                 1 => pack_unpack_with_bits_1::pack(decompressed, compressed, delta_computer),
                 2 => pack_unpack_with_bits_2::pack(decompressed, compressed, delta_computer),
                 3 => pack_unpack_with_bits_3::pack(decompressed, compressed, delta_computer),
@@ -214,9 +218,8 @@ macro_rules! declare_bitpacker {
         }
 
         struct DeltaComputer {
-            pub previous: DataType
+            pub previous: DataType,
         }
-
 
         impl Transformer for DeltaComputer {
             unsafe fn transform(&mut self, current: DataType) -> DataType {
@@ -232,14 +235,12 @@ macro_rules! declare_bitpacker {
         }
 
         struct Store {
-            output_ptr: *mut DataType
+            output_ptr: *mut DataType,
         }
 
         impl Store {
             fn new(output_ptr: *mut DataType) -> Store {
-                Store {
-                    output_ptr
-                }
+                Store { output_ptr }
             }
         }
 
@@ -252,7 +253,7 @@ macro_rules! declare_bitpacker {
             unsafe fn new(initial: u32, output_ptr: *mut DataType) -> DeltaIntegrate {
                 DeltaIntegrate {
                     current: set1(initial as i32),
-                    output_ptr
+                    output_ptr,
                 }
             }
         }
@@ -274,33 +275,12 @@ macro_rules! declare_bitpacker {
             }
         }
 
-        pub unsafe fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
-            compress_generic(
-                decompressed,
-                compressed,
-                num_bits,
-                NoDelta)
-        }
-
-        pub unsafe fn compress_sorted(
-              initial: u32,
-              decompressed: &[u32],
-              compressed: &mut [u8],
-              num_bits: u8) -> usize {
-
-            let delta_computer =
-                DeltaComputer {
-                    previous: set1(initial as i32)
-                };
-            compress_generic(
-                decompressed,
-                compressed,
-                num_bits,
-                delta_computer)
-        }
-
         #[inline(always)]
-        unsafe fn decompress_to<Output: Sink >(compressed: &[u8], mut sink: Output, num_bits: u8) -> usize {
+        unsafe fn decompress_to<Output: Sink>(
+            compressed: &[u8],
+            mut sink: Output,
+            num_bits: u8,
+        ) -> usize {
             match num_bits {
                 0 => {
                     let zero = set1(0i32);
@@ -308,7 +288,7 @@ macro_rules! declare_bitpacker {
                         sink.process(zero);
                     }
                     0
-                },
+                }
                 1 => pack_unpack_with_bits_1::unpack(compressed, sink),
                 2 => pack_unpack_with_bits_2::unpack(compressed, sink),
                 3 => pack_unpack_with_bits_3::unpack(compressed, sink),
@@ -347,77 +327,114 @@ macro_rules! declare_bitpacker {
             }
         }
 
-        pub unsafe fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
-            assert!(
-                decompressed.len() >= BLOCK_LEN,
-                "The output array is not large enough : ({} >= {})",
-                decompressed.len(), BLOCK_LEN);
-            let output_ptr = decompressed.as_mut_ptr()  as *mut DataType;
-            let output = Store::new(output_ptr);
-            decompress_to(compressed, output, num_bits)
-        }
+        pub struct UnsafeBitPackerImpl;
 
-        pub unsafe fn decompress_sorted(
-            initial: u32,
-            compressed: &[u8],
-            decompressed: &mut [u32],
-            num_bits: u8) -> usize
-        {
-            assert!(
-                decompressed.len() >= BLOCK_LEN,
-                "The output array is not large enough : ({} >= {})",
-                decompressed.len(), BLOCK_LEN);
-            let output_ptr = decompressed.as_mut_ptr()  as *mut DataType;
-            let output = DeltaIntegrate::new(initial, output_ptr);
-            decompress_to(compressed, output, num_bits)
-
-        }
-
-        #[$cpufeature]
-        pub unsafe fn num_bits(decompressed: &[u32]) -> u8 {
-            assert_eq!(decompressed.len(), BLOCK_LEN, "`decompressed`'s len is not `BLOCK_LEN={}`", BLOCK_LEN);
-            let data: *const DataType = decompressed.as_ptr() as *const DataType;
-            let mut accumulator = unsafe { load_unaligned(data) };
-            unroll! {
-                for iter in 0..31 {
-                    let i = iter + 1;
-                    let newvec = unsafe { load_unaligned(data.offset(i as isize)) };
-                    accumulator = unsafe { op_or(accumulator, newvec) };
-                }
+        impl UnsafeBitPacker for UnsafeBitPackerImpl {
+            #[$cpufeature]
+            unsafe fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
+                compress_generic(decompressed, compressed, num_bits, NoDelta)
             }
-            most_significant_bit(or_collapse_to_u32(accumulator))
-        }
 
-        pub unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
-            let initial_vec = set1(initial as i32);
-            let data: *const DataType = decompressed.as_ptr() as *const DataType;
-
-            let first = load_unaligned(data);
-            let mut accumulator = compute_delta(load_unaligned(data), initial_vec);
-            let mut previous = first;
-
-            unroll! {
-                for iter in 0..30 {
-                    let i = iter + 1;
-                    let current = load_unaligned(data.offset(i as isize));
-                    let delta = compute_delta(current, previous);
-                    accumulator =  op_or(accumulator, delta);
-                    previous = current;
-                }
+            #[$cpufeature]
+            unsafe fn compress_sorted(
+                &self,
+                initial: u32,
+                decompressed: &[u32],
+                compressed: &mut [u8],
+                num_bits: u8,
+            ) -> usize {
+                let delta_computer = DeltaComputer {
+                    previous: set1(initial as i32),
+                };
+                compress_generic(decompressed, compressed, num_bits, delta_computer)
             }
-            let current = unsafe { load_unaligned(data.offset(31 as isize)) };
-            let delta = unsafe { compute_delta(current, previous) };
-            accumulator =  unsafe { op_or(accumulator, delta) };
-            most_significant_bit(or_collapse_to_u32(accumulator))
+
+            #[$cpufeature]
+            unsafe fn decompress(
+                &self,
+                compressed: &[u8],
+                decompressed: &mut [u32],
+                num_bits: u8,
+            ) -> usize {
+                assert!(
+                    decompressed.len() >= BLOCK_LEN,
+                    "The output array is not large enough : ({} >= {})",
+                    decompressed.len(),
+                    BLOCK_LEN
+                );
+                let output_ptr = decompressed.as_mut_ptr() as *mut DataType;
+                let output = Store::new(output_ptr);
+                decompress_to(compressed, output, num_bits)
+            }
+
+            #[$cpufeature]
+            unsafe fn decompress_sorted(
+                &self,
+                initial: u32,
+                compressed: &[u8],
+                decompressed: &mut [u32],
+                num_bits: u8,
+            ) -> usize {
+                assert!(
+                    decompressed.len() >= BLOCK_LEN,
+                    "The output array is not large enough : ({} >= {})",
+                    decompressed.len(),
+                    BLOCK_LEN
+                );
+                let output_ptr = decompressed.as_mut_ptr() as *mut DataType;
+                let output = DeltaIntegrate::new(initial, output_ptr);
+                decompress_to(compressed, output, num_bits)
+            }
+
+            #[$cpufeature]
+            unsafe fn num_bits(&self, decompressed: &[u32]) -> u8 {
+                assert_eq!(
+                    decompressed.len(),
+                    BLOCK_LEN,
+                    "`decompressed`'s len is not `BLOCK_LEN={}`",
+                    BLOCK_LEN
+                );
+                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+                let mut accumulator = unsafe { load_unaligned(data) };
+                unroll! {
+                    for iter in 0..31 {
+                        let i = iter + 1;
+                        let newvec = unsafe { load_unaligned(data.offset(i as isize)) };
+                        accumulator = unsafe { op_or(accumulator, newvec) };
+                    }
+                }
+                most_significant_bit(or_collapse_to_u32(accumulator))
+            }
+
+            #[$cpufeature]
+            unsafe fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
+                let initial_vec = set1(initial as i32);
+                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+
+                let first = load_unaligned(data);
+                let mut accumulator = compute_delta(load_unaligned(data), initial_vec);
+                let mut previous = first;
+
+                unroll! {
+                    for iter in 0..30 {
+                        let i = iter + 1;
+                        let current = load_unaligned(data.offset(i as isize));
+                        let delta = compute_delta(current, previous);
+                        accumulator =  op_or(accumulator, delta);
+                        previous = current;
+                    }
+                }
+                let current = unsafe { load_unaligned(data.offset(31 as isize)) };
+                let delta = unsafe { compute_delta(current, previous) };
+                accumulator = unsafe { op_or(accumulator, delta) };
+                most_significant_bit(or_collapse_to_u32(accumulator))
+            }
         }
-
-    }
-
+    };
 }
 
 #[cfg(test)]
 macro_rules! bitpacker_tests {
-
     ($bitpacker_name:ident) => {
         use tests::test_suite_compress_decompress;
 
@@ -431,6 +448,6 @@ macro_rules! bitpacker_tests {
             test_suite_compress_decompress::<$bitpacker_name>(true);
         }
 
-         bench_suite!($bitpacker_name);
-    }
+        bench_suite!($bitpacker_name);
+    };
 }

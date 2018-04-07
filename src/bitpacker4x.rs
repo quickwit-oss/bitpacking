@@ -1,4 +1,4 @@
-use super::BitPacker;
+use super::{BitPacker, UnsafeBitPacker};
 
 const BLOCK_LEN: usize = 32 * 4;
 
@@ -6,7 +6,6 @@ const BLOCK_LEN: usize = 32 * 4;
 mod sse3 {
 
     use super::BLOCK_LEN;
-
 
     use std::arch::x86_64::__m128i as DataType;
     use std::arch::x86_64::_mm_set1_epi32 as set1;
@@ -129,85 +128,55 @@ mod scalar {
 }
 
 
-pub struct BitPacker4x;
+pub struct BitPacker4x(Box<UnsafeBitPacker>);
 
 impl BitPacker for BitPacker4x {
 
     const BLOCK_LEN: usize = BLOCK_LEN;
 
-    fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
-        unsafe {
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            {
-                if is_x86_feature_detected!("sse3") {
-                    return sse3::compress(decompressed, compressed, num_bits);
-                }
+    fn new() -> Self {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            if is_x86_feature_detected!("sse3") {
+                return BitPacker4x(Box::new(sse3::UnsafeBitPackerImpl));
             }
-            scalar::compress(decompressed, compressed, num_bits)
         }
-
+        BitPacker4x(Box::new(scalar::UnsafeBitPackerImpl))
     }
 
-    fn compress_sorted(initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
+    fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
         unsafe {
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            {
-                if is_x86_feature_detected!("sse3") {
-                    return sse3::compress_sorted(initial, decompressed, compressed, num_bits);
-                }
-            }
-            scalar::compress_sorted(initial, decompressed, compressed, num_bits)
-        }
-
-    }
-
-    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
-        unsafe {
-            #[cfg(any(target_arch="x86", target_arch="x86_64"))]
-            {
-                if is_x86_feature_detected!("sse3") {
-                    return sse3::decompress(compressed, decompressed, num_bits);
-                }
-            }
-            scalar::decompress(compressed, decompressed, num_bits)
-        }
-
-    }
-
-    fn decompress_sorted(initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
-        unsafe {
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            {
-                if is_x86_feature_detected!("sse3") {
-                    return sse3::decompress_sorted(initial, compressed, decompressed, num_bits);
-                }
-            }
-            scalar::decompress_sorted(initial, compressed, decompressed, num_bits)
+            self.0.compress(decompressed, compressed, num_bits)
         }
     }
 
-    fn num_bits(decompressed: &[u32]) -> u8 {
+    fn compress_sorted(&self, initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
         unsafe {
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            {
-                if is_x86_feature_detected!("sse3") {
-                    return sse3::num_bits(decompressed);
-                }
-            }
-            scalar::num_bits(decompressed)
+            self.0.compress_sorted(initial, decompressed, compressed, num_bits)
         }
-
     }
 
-    fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
+    fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            {
-                if is_x86_feature_detected!("sse3") {
-                    return sse3::num_bits_sorted(initial, decompressed);
-                }
-            }
-            scalar::num_bits_sorted(initial, decompressed)
+            self.0.decompress(compressed, decompressed, num_bits)
+        }
+    }
+
+    fn decompress_sorted(&self, initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
+        unsafe {
+            self.0.decompress_sorted(initial, compressed, decompressed, num_bits)
+        }
+    }
+
+    fn num_bits(&self, decompressed: &[u32]) -> u8 {
+        unsafe {
+            self.0.num_bits(decompressed)
+        }
+    }
+
+    fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
+        unsafe {
+            self.0.num_bits_sorted(initial, decompressed)
         }
     }
 }
@@ -215,6 +184,16 @@ impl BitPacker for BitPacker4x {
 
 #[cfg(test)]
 mod tests {
-    use super::BitPacker4x;
+    use super::{BitPacker4x, scalar, sse3};
+    use tests::test_util_compatible;
+    use super::BLOCK_LEN;
+
     bitpacker_tests!(BitPacker4x);
+
+    #[test]
+    fn test_compatible() {
+        if is_x86_feature_detected!("sse3") {
+            test_util_compatible(&scalar::UnsafeBitPackerImpl, &sse3::UnsafeBitPackerImpl, BLOCK_LEN);
+        }
+    }
 }

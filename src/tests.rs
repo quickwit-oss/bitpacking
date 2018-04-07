@@ -2,15 +2,35 @@ extern crate rand;
 extern crate test;
 
 use self::rand::{Rng, SeedableRng, XorShiftRng};
+use self::test::Bencher;
 use super::BitPacker;
 use super::most_significant_bit;
-use self::test::Bencher;
+use super::UnsafeBitPacker;
 
 pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
+    assert!(max_num_bits <= 32u8);
     let seed: &[u32; 4] = &[1, 2, 3, 4];
-    let max_val = 1 << max_num_bits;
+    let max_val: u64 = 1u64 << max_num_bits;
     let mut rng: XorShiftRng = XorShiftRng::from_seed(*seed);
-    (0..n).map(|_| rng.gen_range(0, max_val)).collect()
+    (0..n).map(|_| rng.gen_range(0, max_val) as u32).collect()
+}
+
+pub(crate) fn test_util_compatible<TLeft: UnsafeBitPacker, TRight: UnsafeBitPacker>(left: &TLeft, right: &TRight, block_len: usize) {
+    for num_bits in 0..33 {
+        let original = generate_array(block_len, num_bits as u8);
+        let mut output_left = vec![0u8; block_len * num_bits / 8];
+        let mut output_right = vec![0u8; block_len * num_bits / 8];
+        unsafe {
+            let num_bits_left = left.num_bits(&original);
+            let num_bits_right = right.num_bits(&original);
+            assert_eq!(num_bits_left, num_bits_right);
+            assert_eq!(num_bits_left, num_bits as u8);
+            let left_len = left.compress(&original, &mut output_left[..], num_bits_left);
+            let right_len = right.compress(&original, &mut output_right[..], num_bits_right);
+            assert_eq!(left_len, right_len);
+            assert_eq!(&output_left[..left_len], &output_right[..right_len]);
+        }
+    }
 }
 
 fn test_util_compress_decompress<TBitPacker: BitPacker>(data: &[u32], expected_num_bits: u8) {
@@ -22,17 +42,19 @@ fn test_util_compress_decompress<TBitPacker: BitPacker>(data: &[u32], expected_n
 
     let mut compressed = vec![0u8; (TBitPacker::BLOCK_LEN as usize) * 4];
     let mut result = vec![0u32; TBitPacker::BLOCK_LEN as usize];
-    let numbits = TBitPacker::num_bits(&original[..]);
+
+    let bitpacker = TBitPacker::new();
+    let numbits = bitpacker.num_bits(&original[..]);
     assert_eq!(numbits, expected_num_bits);
 
-    TBitPacker::compress(&original[..], &mut compressed[..], numbits);
+    bitpacker.compress(&original[..], &mut compressed[..], numbits);
 
     let compressed_len = (numbits as usize) * TBitPacker::BLOCK_LEN / 8;
     for &el in &compressed[compressed_len..] {
         assert_eq!(el, 0u8);
     }
 
-    TBitPacker::decompress(&compressed[..compressed_len], &mut result[..], numbits);
+    bitpacker.decompress(&compressed[..compressed_len], &mut result[..], numbits);
 
     for i in 0..TBitPacker::BLOCK_LEN {
         assert_eq!(
@@ -47,7 +69,6 @@ fn test_util_compress_decompress<TBitPacker: BitPacker>(data: &[u32], expected_n
     }
 }
 
-
 fn test_util_compress_decompress_delta<TBitPacker: BitPacker>(data: &[u32], expected_num_bits: u8) {
     assert_eq!(data.len(), TBitPacker::BLOCK_LEN);
 
@@ -57,17 +78,30 @@ fn test_util_compress_decompress_delta<TBitPacker: BitPacker>(data: &[u32], expe
         let mut compressed = vec![0u8; (TBitPacker::BLOCK_LEN as usize) * 4];
         let mut result = vec![0u32; TBitPacker::BLOCK_LEN as usize];
 
+        let bitpacker = TBitPacker::new();
 
-        let numbits = TBitPacker::num_bits_sorted(initial, &original[..]);
-        assert_eq!(numbits, expected_num_bits, "Failed identifying max bits. Initial {}. Shifted data {:?}", initial, &original[..5]);
-        TBitPacker::compress_sorted(initial, &original[..], &mut compressed[..], numbits);
+        let numbits = bitpacker.num_bits_sorted(initial, &original[..]);
+        assert_eq!(
+            numbits,
+            expected_num_bits,
+            "Failed identifying max bits. Initial {}. Shifted data {:?}",
+            initial,
+            &original[..5]
+        );
+        let bitpacker = TBitPacker::new();
+        bitpacker.compress_sorted(initial, &original[..], &mut compressed[..], numbits);
 
         let compressed_len = (numbits as usize) * TBitPacker::BLOCK_LEN / 8;
         for &el in &compressed[compressed_len..] {
             assert_eq!(el, 0u8);
         }
 
-        TBitPacker::decompress_sorted(initial, &compressed[..compressed_len], &mut result[..], numbits);
+        bitpacker.decompress_sorted(
+            initial,
+            &compressed[..compressed_len],
+            &mut result[..],
+            numbits,
+        );
 
         for i in 0..TBitPacker::BLOCK_LEN {
             assert_eq!(
@@ -83,10 +117,9 @@ fn test_util_compress_decompress_delta<TBitPacker: BitPacker>(data: &[u32], expe
     }
 }
 
-
 enum DataType {
     Delta(u32),
-    NoDelta
+    NoDelta,
 }
 
 fn integrate_data(initial: u32, data: &mut [u32]) {
@@ -118,58 +151,66 @@ pub unsafe fn bench_compress_util<TBitPacker: BitPacker>(bench: &mut Bencher, nu
     let original_values = create_array(TBitPacker::BLOCK_LEN, num_bits_arr, DataType::NoDelta);
     let mut compress = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
+    let bitpacker = TBitPacker::new();
+
     bench.iter(|| {
         let mut offset = 0;
         for i in 0..num_blocks {
             let start = i * TBitPacker::BLOCK_LEN;
             let stop = start + TBitPacker::BLOCK_LEN;
             let block = &original_values[start..stop];
-            let num_bits = TBitPacker::num_bits(block);
+            let num_bits = bitpacker.num_bits(block);
             let stride = TBitPacker::BLOCK_LEN * (num_bits as usize) / 8;
             num_bits_vec.push(num_bits);
-            TBitPacker::compress(block, &mut compress[offset..], num_bits);
+            bitpacker.compress(block, &mut compress[offset..], num_bits);
             offset += stride;
         }
     });
-
 }
 
-pub unsafe fn bench_compress_delta_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
+pub unsafe fn bench_compress_delta_util<TBitPacker: BitPacker>(
+    bench: &mut Bencher,
+    num_bits_arr: &[u8],
+) {
     let num_blocks = num_bits_arr.len();
     bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
     let original_values = create_array(TBitPacker::BLOCK_LEN, num_bits_arr, DataType::Delta(3u32));
     let mut compress = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
+    let bitpacker = TBitPacker::new();
     bench.iter(|| {
         let mut offset = 0;
         for i in 0..num_blocks {
             let start = i * TBitPacker::BLOCK_LEN;
             let stop = start + TBitPacker::BLOCK_LEN;
             let block = &original_values[start..stop];
-            let num_bits = TBitPacker::num_bits(block);
+            let num_bits = bitpacker.num_bits(block);
             let stride = TBitPacker::BLOCK_LEN * (num_bits as usize) / 8;
             num_bits_vec.push(num_bits);
-            TBitPacker::compress_sorted(3u32, block, &mut compress[offset..], num_bits);
+            bitpacker.compress_sorted(3u32, block, &mut compress[offset..], num_bits);
             offset += stride;
         }
     });
-
 }
 
-pub unsafe fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
+pub unsafe fn bench_decompress_util<TBitPacker: BitPacker>(
+    bench: &mut Bencher,
+    num_bits_arr: &[u8],
+) {
     let num_blocks = num_bits_arr.len();
     bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
     let original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr, DataType::NoDelta);
     let mut compressed = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
+    let bitpacker = TBitPacker::new();
     let mut offset = 0;
     for i in 0..num_blocks {
         let start = i * TBitPacker::BLOCK_LEN;
         let stop = start + TBitPacker::BLOCK_LEN;
         let block = &original_values[start..stop];
-        let num_bits = TBitPacker::num_bits(block);
+        let num_bits = bitpacker.num_bits(block);
         num_bits_vec.push(num_bits);
-        TBitPacker::compress(block, &mut compressed[offset..], num_bits);
+        bitpacker.compress(block, &mut compressed[offset..], num_bits);
         offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
     }
     let mut result: Vec<u32> = vec![0u32; original_values.len()];
@@ -177,26 +218,30 @@ pub unsafe fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, 
         let mut offset = 0;
         for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
-            TBitPacker::decompress(&compressed[offset..], dest_block, num_bits);
+            bitpacker.decompress(&compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
         }
     });
 }
 
- pub unsafe fn bench_decompress_delta_util<TBitPacker: BitPacker>(bench: &mut Bencher, num_bits_arr: &[u8]) {
+pub unsafe fn bench_decompress_delta_util<TBitPacker: BitPacker>(
+    bench: &mut Bencher,
+    num_bits_arr: &[u8],
+) {
     let num_blocks = num_bits_arr.len();
     bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
     let original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr, DataType::Delta(3u32));
     let mut compressed = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
     let mut offset = 0;
+    let bitpacker = TBitPacker::new();
     for i in 0..num_blocks {
         let start = i * TBitPacker::BLOCK_LEN;
         let stop = start + TBitPacker::BLOCK_LEN;
         let block = &original_values[start..stop];
-        let num_bits = TBitPacker::num_bits(block);
+        let num_bits = bitpacker.num_bits(block);
         num_bits_vec.push(num_bits);
-        TBitPacker::compress(block, &mut compressed[offset..], num_bits);
+        bitpacker.compress(block, &mut compressed[offset..], num_bits);
         offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
     }
     let mut result: Vec<u32> = vec![0u32; original_values.len()];
@@ -204,26 +249,24 @@ pub unsafe fn bench_decompress_util<TBitPacker: BitPacker>(bench: &mut Bencher, 
         let mut offset = 0;
         for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
-            TBitPacker::decompress(&compressed[offset..], dest_block, num_bits);
+            bitpacker.decompress(&compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
         }
     });
 }
 
-
 macro_rules! bench_one {
-
     ($name:ident, $n:expr, $implementation:ident) => {
         mod $name {
 
             extern crate test;
             use self::test::Bencher;
 
-            use $implementation as BenchedBitPacker;
-            use tests::bench_decompress_util;
+            use tests::bench_compress_delta_util;
             use tests::bench_compress_util;
             use tests::bench_decompress_delta_util;
-            use tests::bench_compress_delta_util;
+            use tests::bench_decompress_util;
+            use $implementation as BenchedBitPacker;
 
             const NUM_INTS: usize = 1_000;
 
@@ -259,7 +302,7 @@ macro_rules! bench_one {
                 }
             }
         }
-    }
+    };
 }
 
 pub fn test_suite_compress_decompress<TBitPacker: BitPacker>(delta: bool) {
@@ -288,15 +331,15 @@ pub fn test_suite_compress_decompress<TBitPacker: BitPacker>(delta: bool) {
 #[macro_export]
 macro_rules! bench_suite {
     ($implementation:ident) => {
-        bench_one!(bench_num_bits_01,  1, $implementation);
-        bench_one!(bench_num_bits_02,  2, $implementation);
-        bench_one!(bench_num_bits_03,  3, $implementation);
-        bench_one!(bench_num_bits_04,  4, $implementation);
-        bench_one!(bench_num_bits_05,  5, $implementation);
-        bench_one!(bench_num_bits_06,  6, $implementation);
-        bench_one!(bench_num_bits_07,  7, $implementation);
-        bench_one!(bench_num_bits_08,  8, $implementation);
-        bench_one!(bench_num_bits_09,  9, $implementation);
+        bench_one!(bench_num_bits_01, 1, $implementation);
+        bench_one!(bench_num_bits_02, 2, $implementation);
+        bench_one!(bench_num_bits_03, 3, $implementation);
+        bench_one!(bench_num_bits_04, 4, $implementation);
+        bench_one!(bench_num_bits_05, 5, $implementation);
+        bench_one!(bench_num_bits_06, 6, $implementation);
+        bench_one!(bench_num_bits_07, 7, $implementation);
+        bench_one!(bench_num_bits_08, 8, $implementation);
+        bench_one!(bench_num_bits_09, 9, $implementation);
         bench_one!(bench_num_bits_10, 10, $implementation);
         bench_one!(bench_num_bits_11, 11, $implementation);
         bench_one!(bench_num_bits_12, 12, $implementation);
@@ -320,5 +363,5 @@ macro_rules! bench_suite {
         bench_one!(bench_num_bits_30, 30, $implementation);
         bench_one!(bench_num_bits_31, 31, $implementation);
         bench_one!(bench_num_bits_32, 32, $implementation);
-    }
+    };
 }

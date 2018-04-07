@@ -42,19 +42,22 @@ use bitpacking::{BitPacker4x, BitPacker};
 #    5, 7, 9, 0, 13, 15, 5, 13, 10, 0, 2, 10, 14, 5, 9, 12, 8, 5, 10,
 #    8, 8, 10, 5, 13, 8, 11, 14, 7, 14, 4, 2, 9, 12, 14, 5, 15, 12, 0,
 #    12, 13, 3, 13, 5, 4, 15, 9, 8, 9, 3, 3, 3, 1, 12, 0, 6, 11, 11, 12, 4];
-let num_bits: u8 = BitPacker4x::num_bits(&my_data);
+
+let bitpacker = BitPacker4x::new();
+
+let num_bits: u8 = bitpacker.num_bits(&my_data);
 
 // A block will be take at most 4 bytes per-integers.
 let mut compressed = vec![0u8; 4 * BitPacker4x::BLOCK_LEN];
 
 # assert_eq!(num_bits, 4);
-let compressed_len = BitPacker4x::compress(&my_data, &mut compressed[..], num_bits);
+let compressed_len = bitpacker.compress(&my_data, &mut compressed[..], num_bits);
 
 assert_eq!((num_bits as usize) *  BitPacker4x::BLOCK_LEN / 8, compressed_len);
 
 // Decompressing
 let mut decompressed = vec![0u32; BitPacker4x::BLOCK_LEN];
-BitPacker4x::decompress(&compressed[..compressed_len], &mut decompressed[..], num_bits);
+bitpacker.decompress(&compressed[..compressed_len], &mut decompressed[..], num_bits);
 
 assert_eq!(&my_data, &decompressed);
 # }
@@ -104,14 +107,16 @@ use bitpacking::{BitPacker4x, BitPacker};
 // value of the first block.
 let initial_value = 0u32;
 
-let num_bits: u8 = BitPacker4x::num_bits_sorted(initial_value, &my_data);
+let bitpacker = BitPacker4x::new();
+
+let num_bits: u8 = bitpacker.num_bits_sorted(initial_value, &my_data);
 
 // A block will be take at most 4 bytes per-integers.
 let mut compressed = vec![0u8; 4 * BitPacker4x::BLOCK_LEN];
 
 # assert_eq!(num_bits, 4);
 
-let compressed_len = BitPacker4x::compress_sorted(initial_value, &my_data, &mut compressed[..], num_bits);
+let compressed_len = bitpacker.compress_sorted(initial_value, &my_data, &mut compressed[..], num_bits);
 
 assert_eq!((num_bits as usize) *  BitPacker4x::BLOCK_LEN / 8, compressed_len);
 
@@ -120,13 +125,12 @@ let mut decompressed = vec![0u32; BitPacker4x::BLOCK_LEN];
 
 // The initial value must be the same as the one passed
 // when compressing the block.
-BitPacker4x::decompress_sorted(initial_value, &compressed[..compressed_len], &mut decompressed[..], num_bits);
+bitpacker.decompress_sorted(initial_value, &compressed[..compressed_len], &mut decompressed[..], num_bits);
 
 assert_eq!(&my_data, &decompressed);
 # }
 ```
 */
-
 
 #![allow(unused_unsafe)]
 #![feature(stdsimd)]
@@ -137,7 +141,6 @@ assert_eq!(&my_data, &decompressed);
 #[macro_use]
 extern crate crunchy;
 
-
 use std::marker::Sized;
 
 #[cfg(test)]
@@ -147,9 +150,31 @@ pub(crate) mod tests;
 #[macro_use]
 mod macros;
 
-pub trait BitPacker: Sized {
+trait UnsafeBitPacker {
+    unsafe fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
+    unsafe fn compress_sorted(
+        &self,
+        initial: u32,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize;
+    unsafe fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
+    unsafe fn decompress_sorted(
+        &self,
+        initial: u32,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize;
+    unsafe fn num_bits(&self, decompressed: &[u32]) -> u8;
+    unsafe fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8;
+}
 
+pub trait BitPacker: Sized {
     const BLOCK_LEN: usize;
+
+    fn new() -> Self;
 
     /// Compress a block of `u32`
     ///
@@ -162,7 +187,7 @@ pub trait BitPacker: Sized {
     ///
     /// Panics if the compressed destination array is too small
     /// Panics if `decompressed` length is not exactly the `BLOCK_LEN`.
-    fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
+    fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
 
     /// Delta encode and compressed the `decompressed` array.
     ///
@@ -183,10 +208,13 @@ pub trait BitPacker: Sized {
     ///
     /// Panics if the compressed array is too short.
     /// Panics if the decompressed array is not exactly the `BLOCK_LEN`.
-    fn compress_sorted(initial: u32,
-                       decompressed: &[u32],
-                       compressed: &mut [u8],
-                       num_bits: u8) -> usize;
+    fn compress_sorted(
+        &self,
+        initial: u32,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize;
 
     /// Decompress the `compress` array to the `decompressed` array.
     ///
@@ -195,8 +223,7 @@ pub trait BitPacker: Sized {
     /// # Panics
     ///
     /// Panics if the compressed array is too short, or the decompressed array is too short.
-    fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
-
+    fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
 
     /// Decompress the`compress`array to the `decompressed` array.
     /// The `compressed` array is assumed to have been delta-encoded and compressed.
@@ -210,26 +237,29 @@ pub trait BitPacker: Sized {
     ///
     /// Panics if the compressed array is too short to contain `BLOCK_LEN` elements
     /// or if the decompressed array is too short.
-    fn decompress_sorted(initial: u32,
-                         compressed: &[u8],
-                         decompressed: &mut [u32],
-                         num_bits: u8) -> usize;
+    fn decompress_sorted(
+        &self,
+        initial: u32,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize;
 
     /// Returns the minimum number of bits used to represent all integers in the
     /// `decompressed` array.
-    fn num_bits(decompressed: &[u32]) -> u8;
+    fn num_bits(&self, decompressed: &[u32]) -> u8;
 
     /// Returns the minimum number of bits used to represent all the deltas in the
     /// `decompressed` array.
-    fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
+    fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8;
 
     /// Returns the size of a compressed block.
-    fn compressed_block_size(&self, num_bits: u8) -> usize {
-        Self::BLOCK_LEN * ( num_bits as usize) / 8
+    fn compressed_block_size(num_bits: u8) -> usize {
+        Self::BLOCK_LEN * (num_bits as usize) / 8
     }
 }
 
-/// Returns the most significant bit.
+/// Returns the most significant bit.&self,
 fn most_significant_bit(v: u32) -> u8 {
     if v == 0 {
         0
