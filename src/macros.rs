@@ -330,19 +330,16 @@ macro_rules! declare_bitpacker {
         pub struct UnsafeBitPackerImpl;
 
         impl UnsafeBitPacker for UnsafeBitPackerImpl {
+
+            const BLOCK_LEN: usize = BLOCK_LEN;
+
             #[$cpufeature]
-            unsafe fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
+            unsafe fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
                 compress_generic(decompressed, compressed, num_bits, NoDelta)
             }
 
             #[$cpufeature]
-            unsafe fn compress_sorted(
-                &self,
-                initial: u32,
-                decompressed: &[u32],
-                compressed: &mut [u8],
-                num_bits: u8,
-            ) -> usize {
+            unsafe fn compress_sorted(initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
                 let delta_computer = DeltaComputer {
                     previous: set1(initial as i32),
                 };
@@ -350,12 +347,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn decompress(
-                &self,
-                compressed: &[u8],
-                decompressed: &mut [u32],
-                num_bits: u8,
-            ) -> usize {
+            unsafe fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
                 assert!(
                     decompressed.len() >= BLOCK_LEN,
                     "The output array is not large enough : ({} >= {})",
@@ -368,13 +360,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn decompress_sorted(
-                &self,
-                initial: u32,
-                compressed: &[u8],
-                decompressed: &mut [u32],
-                num_bits: u8,
-            ) -> usize {
+            unsafe fn decompress_sorted(initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
                 assert!(
                     decompressed.len() >= BLOCK_LEN,
                     "The output array is not large enough : ({} >= {})",
@@ -387,7 +373,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn num_bits(&self, decompressed: &[u32]) -> u8 {
+            unsafe fn num_bits(decompressed: &[u32]) -> u8 {
                 assert_eq!(
                     decompressed.len(),
                     BLOCK_LEN,
@@ -407,7 +393,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
+            unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
                 let initial_vec = set1(initial as i32);
                 let data: *const DataType = decompressed.as_ptr() as *const DataType;
 
@@ -430,24 +416,120 @@ macro_rules! declare_bitpacker {
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
         }
-    };
-}
 
-#[cfg(test)]
-macro_rules! bitpacker_tests {
-    ($bitpacker_name:ident) => {
-        use tests::test_suite_compress_decompress;
+        #[cfg(test)]
+        mod tests {
+            use Available;
+            use tests::test_suite_compress_decompress;
+            use super::UnsafeBitPackerImpl;
 
-        #[test]
-        fn test_bitpacker() {
-            test_suite_compress_decompress::<$bitpacker_name>(false);
+            #[test]
+            fn test_bitpacker() {
+                if UnsafeBitPackerImpl::available() {
+                    test_suite_compress_decompress::<UnsafeBitPackerImpl>(false);
+                }
+            }
+
+            #[test]
+            fn test_bitpacker_delta() {
+                if UnsafeBitPackerImpl::available() {
+                    test_suite_compress_decompress::<UnsafeBitPackerImpl>(true);
+                }
+            }
         }
 
-        #[test]
-        fn test_bitpacker_delta() {
-            test_suite_compress_decompress::<$bitpacker_name>(true);
+
+        macro_rules! bench_one {
+            ($name:ident, $n:expr) => {
+                #[cfg(test)]
+                mod $name {
+
+                    extern crate test;
+                    use Available;
+                    use self::test::Bencher;
+                    use tests::bench_compress_delta_util;
+                    use tests::bench_compress_util;
+                    use tests::bench_decompress_delta_util;
+                    use tests::bench_decompress_util;
+                    use super::UnsafeBitPackerImpl as BenchedBitPacker;
+
+                    const NUM_INTS: usize = 1_000;
+
+                    #[bench]
+                    fn bench_decompress(bench: &mut Bencher) {
+                        unsafe {
+                            let num_bits = [$n; NUM_INTS];
+                            if BenchedBitPacker::available() {
+                                bench_decompress_util::<BenchedBitPacker>(bench, &num_bits[..]);
+                            }
+                        }
+                    }
+
+                    #[bench]
+                    fn bench_compress(bench: &mut Bencher) {
+                        unsafe {
+                            let num_bits = [$n; NUM_INTS];
+                            if BenchedBitPacker::available() {
+                                bench_compress_util::<BenchedBitPacker>(bench, &num_bits[..]);
+                            }
+
+                        }
+                    }
+
+                    #[bench]
+                    fn bench_compress_delta(bench: &mut Bencher) {
+                        unsafe {
+                            let num_bits = [$n; NUM_INTS];
+                            if BenchedBitPacker::available() {
+                                bench_compress_delta_util::<BenchedBitPacker>(bench, &num_bits[..]);
+                            }
+                        }
+                    }
+
+                    #[bench]
+                    fn bench_decompress_delta(bench: &mut Bencher) {
+                        unsafe {
+                            let num_bits = [$n; NUM_INTS];
+                            if BenchedBitPacker::available() {
+                                bench_decompress_delta_util::<BenchedBitPacker>(bench, &num_bits[..]);
+                            }
+                        }
+                    }
+                }
+            };
         }
 
-        bench_suite!($bitpacker_name);
+        bench_one!(bench_num_bits_01, 1);
+        bench_one!(bench_num_bits_02, 2);
+        bench_one!(bench_num_bits_03, 3);
+        bench_one!(bench_num_bits_04, 4);
+        bench_one!(bench_num_bits_05, 5);
+        bench_one!(bench_num_bits_06, 6);
+        bench_one!(bench_num_bits_07, 7);
+        bench_one!(bench_num_bits_08, 8);
+        bench_one!(bench_num_bits_09, 9);
+        bench_one!(bench_num_bits_10, 10);
+        bench_one!(bench_num_bits_11, 11);
+        bench_one!(bench_num_bits_12, 12);
+        bench_one!(bench_num_bits_13, 13);
+        bench_one!(bench_num_bits_14, 14);
+        bench_one!(bench_num_bits_15, 15);
+        bench_one!(bench_num_bits_16, 16);
+        bench_one!(bench_num_bits_17, 17);
+        bench_one!(bench_num_bits_18, 18);
+        bench_one!(bench_num_bits_19, 19);
+        bench_one!(bench_num_bits_20, 20);
+        bench_one!(bench_num_bits_21, 21);
+        bench_one!(bench_num_bits_22, 22);
+        bench_one!(bench_num_bits_23, 23);
+        bench_one!(bench_num_bits_24, 24);
+        bench_one!(bench_num_bits_25, 25);
+        bench_one!(bench_num_bits_26, 26);
+        bench_one!(bench_num_bits_27, 27);
+        bench_one!(bench_num_bits_28, 28);
+        bench_one!(bench_num_bits_29, 29);
+        bench_one!(bench_num_bits_30, 30);
+        bench_one!(bench_num_bits_31, 31);
+        bench_one!(bench_num_bits_32, 32);
     };
 }

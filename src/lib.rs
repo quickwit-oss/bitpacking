@@ -150,26 +150,22 @@ pub(crate) mod tests;
 #[macro_use]
 mod macros;
 
-trait UnsafeBitPacker {
-    unsafe fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
-    unsafe fn compress_sorted(
-        &self,
-        initial: u32,
-        decompressed: &[u32],
-        compressed: &mut [u8],
-        num_bits: u8,
-    ) -> usize;
-    unsafe fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
-    unsafe fn decompress_sorted(
-        &self,
-        initial: u32,
-        compressed: &[u8],
-        decompressed: &mut [u32],
-        num_bits: u8,
-    ) -> usize;
-    unsafe fn num_bits(&self, decompressed: &[u32]) -> u8;
-    unsafe fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8;
+
+trait Available {
+    fn available() -> bool;
 }
+
+trait UnsafeBitPacker {
+    const BLOCK_LEN: usize;
+    unsafe fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
+    unsafe fn compress_sorted(initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
+    unsafe fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
+    unsafe fn decompress_sorted(initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
+    unsafe fn num_bits(decompressed: &[u32]) -> u8;
+    unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
+}
+
+
 
 pub trait BitPacker: Sized {
     const BLOCK_LEN: usize;

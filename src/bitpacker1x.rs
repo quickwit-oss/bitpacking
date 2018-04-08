@@ -4,6 +4,7 @@ const BLOCK_LEN: usize = 32;
 
 mod scalar {
 
+    use Available;
     use super::BLOCK_LEN;
 
     type DataType = u32;
@@ -53,6 +54,12 @@ mod scalar {
     // For other bitpacker, we enable specific CPU instruction set, but for the
     // scalar bitpacker none is required.
     declare_bitpacker!(cfg(any(debug, not(debug))));
+
+    impl Available for UnsafeBitPackerImpl {
+        fn available() -> bool {
+            true
+        }
+    }
 }
 
 pub struct BitPacker1x;
@@ -65,7 +72,7 @@ impl BitPacker for BitPacker1x {
     }
 
     fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
-        unsafe { scalar::UnsafeBitPackerImpl.compress(decompressed, compressed, num_bits) }
+        unsafe { scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits) }
     }
 
     fn compress_sorted(
@@ -76,7 +83,7 @@ impl BitPacker for BitPacker1x {
         num_bits: u8,
     ) -> usize {
         unsafe {
-            scalar::UnsafeBitPackerImpl.compress_sorted(
+            scalar::UnsafeBitPackerImpl::compress_sorted(
                 initial,
                 decompressed,
                 compressed,
@@ -86,7 +93,7 @@ impl BitPacker for BitPacker1x {
     }
 
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
-        unsafe { scalar::UnsafeBitPackerImpl.decompress(compressed, decompressed, num_bits) }
+        unsafe { scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits) }
     }
 
     fn decompress_sorted(
@@ -97,7 +104,7 @@ impl BitPacker for BitPacker1x {
         num_bits: u8,
     ) -> usize {
         unsafe {
-            scalar::UnsafeBitPackerImpl.decompress_sorted(
+            scalar::UnsafeBitPackerImpl::decompress_sorted(
                 initial,
                 compressed,
                 decompressed,
@@ -107,16 +114,10 @@ impl BitPacker for BitPacker1x {
     }
 
     fn num_bits(&self, decompressed: &[u32]) -> u8 {
-        unsafe { scalar::UnsafeBitPackerImpl.num_bits(decompressed) }
+        unsafe { scalar::UnsafeBitPackerImpl::num_bits(decompressed) }
     }
 
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
-        unsafe { scalar::UnsafeBitPackerImpl.num_bits_sorted(initial, decompressed) }
+        unsafe { scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed) }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::BitPacker1x;
-    bitpacker_tests!(BitPacker1x);
 }
