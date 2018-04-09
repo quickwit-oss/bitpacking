@@ -62,6 +62,11 @@ mod scalar {
     }
 }
 
+
+/// `BitPacker1x` is standard bitpacking : the integer representation over
+/// `b` bits are simply concatenated one after the other.
+///
+/// One block must contain `32 integers`.
 pub struct BitPacker1x;
 
 impl BitPacker for BitPacker1x {

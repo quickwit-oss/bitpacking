@@ -381,12 +381,12 @@ macro_rules! declare_bitpacker {
                     BLOCK_LEN
                 );
                 let data: *const DataType = decompressed.as_ptr() as *const DataType;
-                let mut accumulator = unsafe { load_unaligned(data) };
+                let mut accumulator = load_unaligned(data);
                 unroll! {
                     for iter in 0..31 {
                         let i = iter + 1;
-                        let newvec = unsafe { load_unaligned(data.offset(i as isize)) };
-                        accumulator = unsafe { op_or(accumulator, newvec) };
+                        let newvec = load_unaligned(data.offset(i as isize));
+                        accumulator = op_or(accumulator, newvec);
                     }
                 }
                 most_significant_bit(or_collapse_to_u32(accumulator))
@@ -410,9 +410,9 @@ macro_rules! declare_bitpacker {
                         previous = current;
                     }
                 }
-                let current = unsafe { load_unaligned(data.offset(31 as isize)) };
-                let delta = unsafe { compute_delta(current, previous) };
-                accumulator = unsafe { op_or(accumulator, delta) };
+                let current = load_unaligned(data.offset(31 as isize));
+                let delta = compute_delta(current, previous);
+                accumulator = op_or(accumulator, delta);
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
         }

@@ -3,7 +3,6 @@ use Available;
 
 const BLOCK_LEN: usize = 32 * 8;
 
-
 #[cfg(any(target_arch="x86", target_arch="x86_64"))]
 mod avx2 {
 
@@ -177,11 +176,15 @@ mod scalar {
     }
 }
 
-
-pub enum BitPacker8x {
+enum InstructionSet {
     AVX2,
     Scalar
 }
+
+/// `BitPacker8x` packs integers in groups of 8. This gives an opportunity
+/// to leverage `AVX2` instructions to encode and decode the stream.
+/// One block must contain `256 integers`.
+pub struct BitPacker8x(InstructionSet);
 
 impl BitPacker for BitPacker8x {
 
@@ -191,18 +194,18 @@ impl BitPacker for BitPacker8x {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if avx2::UnsafeBitPackerImpl::available() {
-                return BitPacker8x::AVX2;
+                return BitPacker8x(InstructionSet::AVX2);
             }
         }
-        BitPacker8x::Scalar
+        BitPacker8x(InstructionSet::Scalar)
     }
 
     fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
         unsafe {
-            match *self {
-                BitPacker8x::AVX2 =>
+            match self.0 {
+                InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits),
-                BitPacker8x::Scalar =>
+                InstructionSet::Scalar =>
                     scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
             }
 
@@ -211,10 +214,10 @@ impl BitPacker for BitPacker8x {
 
     fn compress_sorted(&self, initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
         unsafe {
-            match *self {
-                BitPacker8x::AVX2 =>
+            match self.0 {
+                InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::compress_sorted(initial, decompressed, compressed, num_bits),
-                BitPacker8x::Scalar =>
+                InstructionSet::Scalar =>
                     scalar::UnsafeBitPackerImpl::compress_sorted(initial, decompressed, compressed, num_bits)
             }
 
@@ -223,10 +226,10 @@ impl BitPacker for BitPacker8x {
 
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
-            match *self {
-                BitPacker8x::AVX2 =>
+            match self.0 {
+                InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits),
-                BitPacker8x::Scalar =>
+                InstructionSet::Scalar =>
                     scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
             }
         }
@@ -234,10 +237,10 @@ impl BitPacker for BitPacker8x {
 
     fn decompress_sorted(&self, initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
-            match *self {
-                BitPacker8x::AVX2 =>
+            match self.0 {
+                InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::decompress_sorted(initial, compressed, decompressed, num_bits),
-                BitPacker8x::Scalar =>
+                InstructionSet::Scalar =>
                     scalar::UnsafeBitPackerImpl::decompress_sorted(initial, compressed, decompressed, num_bits)
             }
         }
@@ -245,10 +248,10 @@ impl BitPacker for BitPacker8x {
 
     fn num_bits(&self, decompressed: &[u32]) -> u8 {
         unsafe {
-            match *self {
-                BitPacker8x::AVX2 =>
+            match self.0 {
+                InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::num_bits(decompressed),
-                BitPacker8x::Scalar =>
+                InstructionSet::Scalar =>
                     scalar::UnsafeBitPackerImpl::num_bits(decompressed)
             }
         }
@@ -256,10 +259,10 @@ impl BitPacker for BitPacker8x {
 
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
         unsafe {
-            match *self {
-                BitPacker8x::AVX2 =>
+            match self.0 {
+                InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed),
-                BitPacker8x::Scalar =>
+                InstructionSet::Scalar =>
                     scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
             }
         }
