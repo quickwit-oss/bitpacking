@@ -3,6 +3,8 @@ use super::{BitPacker, UnsafeBitPacker};
 const BLOCK_LEN: usize = 32;
 
 mod scalar {
+    use std::ptr::read_unaligned as load_unaligned;
+    use std::ptr::write_unaligned as store_unaligned;
 
     use Available;
     use super::BLOCK_LEN;
@@ -27,14 +29,6 @@ mod scalar {
 
     fn op_and(left: DataType, right: DataType) -> DataType {
         left & right
-    }
-
-    unsafe fn load_unaligned(addr: *const DataType) -> DataType {
-        *addr
-    }
-
-    unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
-        *addr = data;
     }
 
     fn or_collapse_to_u32(accumulator: DataType) -> u32 {
