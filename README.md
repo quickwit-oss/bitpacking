@@ -17,16 +17,15 @@ It makes it possible to compress/decompress :
 
 [Reference documentation](https://docs.rs/bitpacking/0.2.0/bitpacking/)
 
-
 # What is bitpacking ?
 
-Compressing small integers is a very common problem in search engines, databases, and analytics.
+Traditional compression schemes like LZ4 are not really suited to address this problem efficiently.
+Instead, there are different families of solutions to this problem.
 
-Traditional compression scheme like LZ4 are not really suited to address this problem efficiently.
-One of the most straightforward and efficient solution is called *bitpacking* :
+One of the most straightforward and efficient ones is `bitpacking` :
 - Integers are first grouped into blocks of constant size (e.g. `128` when using the SSE2 implementation).
-- The minimum number of bits `b` that makes it possible to represent the largest integer in the blockis computed.
-In other words, `b` is the smallest integers such that all integers in the block are stricly smaller than 2<sup>b</sup>.
+- If not available implicitely, compute the minimum number of bits `b` that makes it possible to represent all of the integers.
+In other words, the smallest `b` such that all integers in the block are stricly smaller than 2<sup>b</sup>.
 - The bitpacked representation is then some variation of the concatenation of the integers restricted to their least significant `b`-bits.
 
 For instance, assuming a block of `4`, when encoding `4, 9, 3, 2`. Assuming that the highest value in the block is 9, `b = 4`. All values will then be encoded over 4 bits as follows.
@@ -42,10 +41,7 @@ For instance, assuming a block of `4`, when encoding `4, 9, 3, 2`. Assuming that
 
 As a result, each integer of this block will only require 4 bits.
 
-
-
 # Choosing between BitPacker1x, BitPacker4x and BitPacker8x.
-
 
 :warning: `BitPacker1x`, `BitPacker4x`, and `BitPacker8x` produce different formats,
 and are incompatible one with another.
