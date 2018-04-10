@@ -15,7 +15,7 @@ It makes it possible to compress/decompress :
 
 # Documentation
 
-[Reference documentation](https://docs.rs/bitpacking/0.2.0/bitpacking/)
+[Reference documentation](https://docs.rs/bitpacking/)
 
 # What is bitpacking ?
 
