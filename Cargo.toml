@@ -1,6 +1,6 @@
 [package]
 name = "bitpacking"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Paul Masurel <paul.masurel@gmail.com>"]
 license = "MIT"
 readme = "README.md"
@@ -12,3 +12,4 @@ crunchy = "0.1.6"
 
 [dev-dependencies]
 rand = "0.3"
+
