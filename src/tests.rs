@@ -15,6 +15,7 @@ pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
     (0..n).map(|_| rng.gen_range(0, max_val) as u32).collect()
 }
 
+#[cfg(feature="simd")]
 pub(crate) fn test_util_compatible<TLeft: UnsafeBitPacker, TRight: UnsafeBitPacker>(block_len: usize) {
     for num_bits in 0..33 {
         let original = generate_array(block_len, num_bits as u8);

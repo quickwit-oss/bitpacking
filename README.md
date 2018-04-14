@@ -1,6 +1,5 @@
 # Fast Bitpacking algorithms
 
-
 [![Linux build status](https://travis-ci.org/tantivy-search/bitpacking.svg?branch=master)](https://travis-ci.org/tantivy-search/bitpacking)
 [![](http://meritbadge.herokuapp.com/bitpacking)](https://crates.io/crates/bitpacking)
 
@@ -11,6 +10,23 @@ It makes it possible to compress/decompress :
 - sequences of increasing integers
 
 :star: It is fast. Expect > 4 billions integers per seconds.
+
+
+
+# How to compile ?
+
+The `bitpacking` crate will compile with stable rust, but for the moment it is
+necessary to use rust nightly and enable the `simd` feature manually to get the extra performance
+coming from `simd` instructions.
+
+To sum it up, just add to your `Cargo.toml` :
+
+    bitpacking = "0.4"
+
+If you are working with nightly rust, your application is performance critical,
+you might want to configure this dependency as follows
+
+    bitpacking = { version = "0.4", features = ["simd"] }
 
 
 # Documentation

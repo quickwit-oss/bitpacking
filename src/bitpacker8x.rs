@@ -1,9 +1,12 @@
 use super::{BitPacker, UnsafeBitPacker};
+
+#[cfg(feature="simd")]
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use Available;
 
 const BLOCK_LEN: usize = 32 * 8;
 
+#[cfg(feature="simd")]
 #[cfg(any(target_arch="x86", target_arch="x86_64"))]
 mod avx2 {
 
@@ -178,6 +181,7 @@ mod scalar {
 }
 
 enum InstructionSet {
+    #[cfg(feature="simd")]
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
     AVX2,
     Scalar
@@ -193,6 +197,7 @@ impl BitPacker for BitPacker8x {
     const BLOCK_LEN: usize = BLOCK_LEN;
 
     fn new() -> Self {
+        #[cfg(feature="simd")]
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             if avx2::UnsafeBitPackerImpl::available() {
@@ -205,6 +210,7 @@ impl BitPacker for BitPacker8x {
     fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
         unsafe {
             match self.0 {
+                #[cfg(feature="simd")]
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits),
@@ -218,6 +224,7 @@ impl BitPacker for BitPacker8x {
     fn compress_sorted(&self, initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
         unsafe {
             match self.0 {
+                #[cfg(feature="simd")]
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::compress_sorted(initial, decompressed, compressed, num_bits),
@@ -231,6 +238,7 @@ impl BitPacker for BitPacker8x {
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
             match self.0 {
+                #[cfg(feature="simd")]
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits),
@@ -243,6 +251,7 @@ impl BitPacker for BitPacker8x {
     fn decompress_sorted(&self, initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
             match self.0 {
+                #[cfg(feature="simd")]
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::decompress_sorted(initial, compressed, decompressed, num_bits),
@@ -255,6 +264,7 @@ impl BitPacker for BitPacker8x {
     fn num_bits(&self, decompressed: &[u32]) -> u8 {
         unsafe {
             match self.0 {
+                #[cfg(feature="simd")]
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::num_bits(decompressed),
@@ -267,6 +277,7 @@ impl BitPacker for BitPacker8x {
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
         unsafe {
             match self.0 {
+                #[cfg(feature="simd")]
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
                 InstructionSet::AVX2 =>
                     avx2::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed),
@@ -278,6 +289,8 @@ impl BitPacker for BitPacker8x {
 }
 
 
+#[cfg(feature="simd")]
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[cfg(test)]
 mod tests {
     use Available;
