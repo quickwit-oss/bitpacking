@@ -25,7 +25,7 @@ See the [`BitPacker` trait](./trait.BitPacker.html) for example usage.
 #![cfg_attr(feature="simd", feature(stdsimd))]
 #![cfg_attr(feature="simd", feature(target_feature))]
 #![cfg_attr(feature="simd", feature(cfg_target_feature))]
-#![cfg_attr(test, feature(test))]
+#![cfg_attr(all(test, feature="unstable"), feature(test))]
 #![warn(missing_docs)]
 
 

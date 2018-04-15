@@ -441,16 +441,16 @@ macro_rules! declare_bitpacker {
 
         macro_rules! bench_one {
             ($name:ident, $n:expr) => {
-                #[cfg(test)]
+                #[cfg(all(feature="unstable", test))]
                 mod $name {
 
                     extern crate test;
                     use Available;
                     use self::test::Bencher;
-                    use tests::bench_compress_delta_util;
-                    use tests::bench_compress_util;
-                    use tests::bench_decompress_delta_util;
-                    use tests::bench_decompress_util;
+                    use tests::bench::bench_compress_delta_util;
+                    use tests::bench::bench_compress_util;
+                    use tests::bench::bench_decompress_delta_util;
+                    use tests::bench::bench_decompress_util;
                     use super::UnsafeBitPackerImpl as BenchedBitPacker;
 
                     const NUM_INTS: usize = 1_000;

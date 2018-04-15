@@ -128,7 +128,7 @@ Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz.
 
 You can get accurate figures on your hardware by running the following command.
 
-    cargo bench
+    cargo +nightly bench --features unstable
 
 
 ## BitPacker1x
@@ -140,7 +140,7 @@ You can get accurate figures on your hardware by running the following command.
 | decompress       | 1.8 billions int/s   |
 | decompress_delta | 1.4 billions int/s   |
 
-# BitPacker4x
+# BitPacker4x (assuming SSE3 instructions are available)
 
 | operation        | throughput           |
 |:-----------------|:---------------------|
@@ -149,7 +149,7 @@ You can get accurate figures on your hardware by running the following command.
 | decompress       | 5.5 billions int/s   |
 | decompress_delta | 5 billions int/s   |
 
-# BitPacker8x
+# BitPacker8x (assuming AVX2 instructions are available)
 
 | operation        | throughput           |
 |:-----------------|:---------------------|

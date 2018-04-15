@@ -16,3 +16,4 @@ rand = "0.3"
 [features]
 default = []
 simd = []
+unstable = ["simd"]
