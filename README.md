@@ -15,18 +15,21 @@ It makes it possible to compress/decompress :
 
 # How to compile ?
 
-The `bitpacking` crate will compile with stable rust, but for the moment it is
-necessary to use rust nightly and enable the `simd` feature manually to get the extra performance
-coming from `simd` instructions.
+`bitpacking` compiles on stable rust but require rust > 1.27 to compile.
 
-To sum it up, just add to your `Cargo.toml` :
+Just add to your `Cargo.toml` :
 
-    bitpacking = "0.4"
+    bitpacking = "0.5"
 
-If you are working with nightly rust, your application is performance critical,
-you might want to configure this dependency as follows
+For some bitpacking flavor and for some platform, the bitpacking crate
+may benefit from some specific simd instruction set.
 
-    bitpacking = { version = "0.4", features = ["simd"] }
+In this case, it will always ship an alternative scalar implementation and will
+fall back to the scalar implementation at runtime.
+
+In other words, your do not need to configure anything. Your program will run correctly,
+and at the fastest speed available for your CPU.
+
 
 
 # Documentation
