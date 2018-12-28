@@ -50,7 +50,6 @@ trait UnsafeBitPacker {
     unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
 }
 
-
 /// # Examples without delta-encoding
 /// ```
 /// extern crate bitpacking;
@@ -152,7 +151,7 @@ trait UnsafeBitPacker {
 ///
 /// assert_eq!(&my_data, &decompressed);
 /// # }
-pub trait BitPacker: Sized {
+pub trait BitPacker: Sized + Clone + Copy {
 
     /// Number of `u32` per compressed block
     const BLOCK_LEN: usize;

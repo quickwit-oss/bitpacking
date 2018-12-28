@@ -1,8 +1,6 @@
 extern crate rand;
 
 use self::rand::{Rng, SeedableRng, XorShiftRng};
-
-
 use super::UnsafeBitPacker;
 use super::most_significant_bit;
 
@@ -12,6 +10,15 @@ pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
     let max_val: u64 = 1u64 << max_num_bits;
     let mut rng: XorShiftRng = XorShiftRng::from_seed(*seed);
     (0..n).map(|_| rng.gen_range(0, max_val) as u32).collect()
+}
+
+fn integrate_data(initial: u32, data: &mut [u32]) {
+    let mut cumul = initial;
+    let len = data.len();
+    for i in 0..len {
+        cumul = cumul.wrapping_add(data[i]);
+        data[i] = cumul;
+    }
 }
 
 pub(crate) fn test_util_compatible<TLeft: UnsafeBitPacker, TRight: UnsafeBitPacker>(block_len: usize) {
@@ -117,16 +124,6 @@ fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(data: &[u32]
     }
 }
 
-
-fn integrate_data(initial: u32, data: &mut [u32]) {
-    let mut cumul = initial;
-    let len = data.len();
-    for i in 0..len {
-        cumul = cumul.wrapping_add(data[i]);
-        data[i] = cumul;
-    }
-}
-
 pub(crate) fn test_suite_compress_decompress<TBitPacker: UnsafeBitPacker>(delta: bool) {
     let num_blocks = (1 << 15) / TBitPacker::BLOCK_LEN;
     let n = num_blocks * TBitPacker::BLOCK_LEN;
@@ -147,139 +144,5 @@ pub(crate) fn test_suite_compress_decompress<TBitPacker: UnsafeBitPacker>(delta:
                 test_util_compress_decompress::<TBitPacker>(block, computed_num_bits);
             }
         }
-    }
-}
-
-
-#[cfg(all(feature="unstable", test))]
-pub mod bench {
-
-    extern crate test;
-
-    use super::integrate_data;
-    use super::super::UnsafeBitPacker;
-
-    enum DataType {
-        Delta(u32),
-        NoDelta,
-    }
-
-    fn create_array(block_len: usize, num_bits_arr: &[u8], data_type: DataType) -> Vec<u32> {
-        let mut original_values = vec![];
-        for &num_bits in num_bits_arr {
-            let val: u32 = (1u64 << (num_bits as u64) - 1u64) as u32;
-            for _ in 0..block_len {
-                original_values.push(val);
-            }
-        }
-        if let DataType::Delta(initial) = data_type {
-            integrate_data(initial, &mut original_values);
-        }
-        original_values
-    }
-
-
-    pub(crate) unsafe fn bench_decompress_util<TBitPacker>(bench: &mut test::Bencher, num_bits_arr: &[u8])
-        where TBitPacker: UnsafeBitPacker
-    {
-        let num_blocks = num_bits_arr.len();
-        bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
-        let original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr, DataType::NoDelta);
-        let mut compressed = vec![0u8; original_values.len() * 4];
-        let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
-        let mut offset = 0;
-        for i in 0..num_blocks {
-            let start = i * TBitPacker::BLOCK_LEN;
-            let stop = start + TBitPacker::BLOCK_LEN;
-            let block = &original_values[start..stop];
-            let num_bits = TBitPacker::num_bits(block);
-            num_bits_vec.push(num_bits);
-            TBitPacker::compress(block, &mut compressed[offset..], num_bits);
-            offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
-        }
-        let mut result: Vec<u32> = vec![0u32; original_values.len()];
-        bench.iter(|| {
-            let mut offset = 0;
-            for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
-                let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
-                TBitPacker::decompress(&compressed[offset..], dest_block, num_bits);
-                offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
-            }
-        });
-    }
-
-    pub(crate) unsafe fn bench_compress_util<TBitPacker: UnsafeBitPacker>(bench: &mut test::Bencher, num_bits_arr: &[u8]) {
-        let num_blocks = num_bits_arr.len();
-        bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
-        let original_values = create_array(TBitPacker::BLOCK_LEN, num_bits_arr, DataType::NoDelta);
-        let mut compress = vec![0u8; original_values.len() * 4];
-        let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
-        bench.iter(|| {
-            let mut offset = 0;
-            for i in 0..num_blocks {
-                let start = i * TBitPacker::BLOCK_LEN;
-                let stop = start + TBitPacker::BLOCK_LEN;
-                let block = &original_values[start..stop];
-                let num_bits = TBitPacker::num_bits(block);
-                let stride = TBitPacker::BLOCK_LEN * (num_bits as usize) / 8;
-                num_bits_vec.push(num_bits);
-                TBitPacker::compress(block, &mut compress[offset..], num_bits);
-                offset += stride;
-            }
-        });
-    }
-
-
-
-    pub(crate) unsafe fn bench_decompress_delta_util<TBitPacker: UnsafeBitPacker>(
-        bench: &mut test::Bencher, num_bits_arr: &[u8]) {
-        let num_blocks = num_bits_arr.len();
-        bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
-        let original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr, DataType::Delta(3u32));
-        let mut compressed = vec![0u8; original_values.len() * 4];
-        let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
-        let mut offset = 0;
-        for i in 0..num_blocks {
-            let start = i * TBitPacker::BLOCK_LEN;
-            let stop = start + TBitPacker::BLOCK_LEN;
-            let block = &original_values[start..stop];
-            let num_bits = TBitPacker::num_bits(block);
-            num_bits_vec.push(num_bits);
-            TBitPacker::compress(block, &mut compressed[offset..], num_bits);
-            offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
-        }
-        let mut result: Vec<u32> = vec![0u32; original_values.len()];
-        bench.iter(|| {
-            let mut offset = 0;
-            for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
-                let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
-                TBitPacker::decompress(&compressed[offset..], dest_block, num_bits);
-                offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
-            }
-        });
-    }
-
-    pub(crate) unsafe fn bench_compress_delta_util<TBitPacker: UnsafeBitPacker>(
-        bench: &mut test::Bencher,
-        num_bits_arr: &[u8],
-    ) {
-        let num_blocks = num_bits_arr.len();
-        bench.bytes = (num_blocks * TBitPacker::BLOCK_LEN * 4) as u64;
-        let original_values = create_array(TBitPacker::BLOCK_LEN, num_bits_arr, DataType::Delta(3u32));
-        let mut compress = vec![0u8; original_values.len() * 4];
-        let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
-        bench.iter(|| {
-            let mut offset = 0;
-            for i in 0..num_blocks {
-                let start = i * TBitPacker::BLOCK_LEN;
-                let stop = start + TBitPacker::BLOCK_LEN;
-                let block = &original_values[start..stop];
-                let num_bits = TBitPacker::num_bits(block);
-                let stride = TBitPacker::BLOCK_LEN * (num_bits as usize) / 8;
-                num_bits_vec.push(num_bits);
-                TBitPacker::compress_sorted(3u32, block, &mut compress[offset..], num_bits);
-                offset += stride;
-            }
-        });
     }
 }

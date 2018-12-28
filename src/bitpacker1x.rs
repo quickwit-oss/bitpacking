@@ -61,6 +61,7 @@ mod scalar {
 /// `b` bits are simply concatenated one after the other.
 ///
 /// One block must contain `32 integers`.
+#[derive(Clone, Copy)]
 pub struct BitPacker1x;
 
 impl BitPacker for BitPacker1x {

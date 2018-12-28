@@ -178,6 +178,7 @@ mod scalar {
     }
 }
 
+#[derive(Clone, Copy)]
 enum InstructionSet {
     #[cfg(target_arch = "x86_64")]
     AVX2,
@@ -187,6 +188,7 @@ enum InstructionSet {
 /// `BitPacker8x` packs integers in groups of 8. This gives an opportunity
 /// to leverage `AVX2` instructions to encode and decode the stream.
 /// One block must contain `256 integers`.
+#[derive(Clone, Copy)]
 pub struct BitPacker8x(InstructionSet);
 
 impl BitPacker for BitPacker8x {

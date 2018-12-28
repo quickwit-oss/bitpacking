@@ -144,6 +144,7 @@ mod scalar {
     }
 }
 
+#[derive(Clone, Copy)]
 enum InstructionSet {
     #[cfg(target_arch = "x86_64")]
     SSE3,
@@ -155,6 +156,7 @@ enum InstructionSet {
 /// to leverage `SSE3` instructions to encode and decode the stream.
 ///
 /// One block must contain `128 integers`.
+#[derive(Clone, Copy)]
 pub struct BitPacker4x(InstructionSet);
 
 impl BitPacker for BitPacker4x {

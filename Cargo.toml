@@ -1,6 +1,6 @@
 [package]
 name = "bitpacking"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Paul Masurel <paul.masurel@gmail.com>"]
 license = "MIT"
 readme = "README.md"
@@ -12,3 +12,9 @@ crunchy = "0.1.6"
 
 [dev-dependencies]
 rand = "0.3"
+criterion = "0.2"
+
+[[bench]]
+name = "bitpacking_bench"
+path = "src/bitpacking_bench.rs"
+harness = false
