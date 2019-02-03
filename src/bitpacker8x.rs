@@ -74,6 +74,7 @@ mod scalar {
 
     use super::BLOCK_LEN;
     use Available;
+    use std::ptr;
 
     type DataType = [u32; 8];
 
@@ -128,11 +129,11 @@ mod scalar {
     }
 
     unsafe fn load_unaligned(addr: *const DataType) -> DataType {
-        *addr
+        ptr::read_unaligned(addr)
     }
 
-    unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
-        *addr = data;
+    unsafe fn store_unaligned(dst: *mut DataType, data: DataType) {
+        ptr::write_unaligned(dst, data);
     }
 
     fn or_collapse_to_u32(accumulator: DataType) -> u32 {
