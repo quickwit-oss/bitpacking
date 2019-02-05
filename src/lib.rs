@@ -35,7 +35,6 @@ pub(crate) mod tests;
 #[macro_use]
 mod macros;
 
-
 trait Available {
     fn available() -> bool;
 }
@@ -43,9 +42,19 @@ trait Available {
 trait UnsafeBitPacker {
     const BLOCK_LEN: usize;
     unsafe fn compress(decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
-    unsafe fn compress_sorted(initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize;
+    unsafe fn compress_sorted(
+        initial: u32,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize;
     unsafe fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
-    unsafe fn decompress_sorted(initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
+    unsafe fn decompress_sorted(
+        initial: u32,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize;
     unsafe fn num_bits(decompressed: &[u32]) -> u8;
     unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
 }
@@ -152,7 +161,6 @@ trait UnsafeBitPacker {
 /// assert_eq!(&my_data, &decompressed);
 /// # }
 pub trait BitPacker: Sized + Clone + Copy {
-
     /// Number of `u32` per compressed block
     const BLOCK_LEN: usize;
 

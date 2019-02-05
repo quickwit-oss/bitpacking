@@ -6,8 +6,8 @@ mod scalar {
     use std::ptr::read_unaligned as load_unaligned;
     use std::ptr::write_unaligned as store_unaligned;
 
-    use Available;
     use super::BLOCK_LEN;
+    use Available;
 
     type DataType = u32;
 
@@ -55,7 +55,6 @@ mod scalar {
         }
     }
 }
-
 
 /// `BitPacker1x` is standard bitpacking : the integer representation over
 /// `b` bits are simply concatenated one after the other.

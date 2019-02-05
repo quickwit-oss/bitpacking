@@ -1,8 +1,8 @@
 extern crate rand;
 
 use self::rand::{Rng, SeedableRng, XorShiftRng};
-use super::UnsafeBitPacker;
 use super::most_significant_bit;
+use super::UnsafeBitPacker;
 
 pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
     assert!(max_num_bits <= 32u8);
@@ -21,7 +21,9 @@ fn integrate_data(initial: u32, data: &mut [u32]) {
     }
 }
 
-pub(crate) fn test_util_compatible<TLeft: UnsafeBitPacker, TRight: UnsafeBitPacker>(block_len: usize) {
+pub(crate) fn test_util_compatible<TLeft: UnsafeBitPacker, TRight: UnsafeBitPacker>(
+    block_len: usize,
+) {
     for num_bits in 0..33 {
         let original = generate_array(block_len, num_bits as u8);
         let mut output_left = vec![0u8; block_len * num_bits / 8];
@@ -76,7 +78,10 @@ fn test_util_compress_decompress<TBitPacker: UnsafeBitPacker>(data: &[u32], expe
     }
 }
 
-fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(data: &[u32], expected_num_bits: u8) {
+fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(
+    data: &[u32],
+    expected_num_bits: u8,
+) {
     assert_eq!(data.len(), TBitPacker::BLOCK_LEN);
 
     for initial in 0u32..2u32 {

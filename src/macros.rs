@@ -35,7 +35,7 @@ macro_rules! pack_unpack_with_bits {
                         const inner_cursor: usize = bits_filled % 32;
                         const remaining: usize = 32 - inner_cursor;
 
-                        let offset_ptr = input_ptr.offset(i as isize);
+                        let offset_ptr = input_ptr.add(i);
                         let in_register: DataType = delta_computer.transform(load_unaligned(offset_ptr));
 
                         out_register =
@@ -55,7 +55,7 @@ macro_rules! pack_unpack_with_bits {
                         }
                     }
                 }
-                let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr.offset(31 as isize)));
+                let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr.add(31)));
                 out_register =
                     if NUM_BITS != 32 {
                         let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
@@ -98,7 +98,7 @@ macro_rules! pack_unpack_with_bits {
                         // We consumed our current quadruplets entirely.
                         // We therefore read another one.
                         if inner_capacity <= NUM_BITS && i != 31 {
-                            input_ptr = input_ptr.offset(1);
+                            input_ptr = input_ptr.add(1);
                             in_register = load_unaligned(input_ptr);
 
                             // This quadruplets is actually cutting one of
@@ -230,7 +230,6 @@ macro_rules! declare_bitpacker {
         }
 
         pub trait Sink {
-            #[inline(always)]
             unsafe fn process(&mut self, data_type: DataType);
         }
 
@@ -263,7 +262,7 @@ macro_rules! declare_bitpacker {
             unsafe fn process(&mut self, delta: DataType) {
                 self.current = integrate_delta(self.current, delta);
                 store_unaligned(self.output_ptr, self.current);
-                self.output_ptr = self.output_ptr.offset(1);
+                self.output_ptr = self.output_ptr.add(1);
             }
         }
 
@@ -271,7 +270,7 @@ macro_rules! declare_bitpacker {
             #[inline(always)]
             unsafe fn process(&mut self, out_register: DataType) {
                 store_unaligned(self.output_ptr, out_register);
-                self.output_ptr = self.output_ptr.offset(1);
+                self.output_ptr = self.output_ptr.add(1);
             }
         }
 
@@ -330,7 +329,6 @@ macro_rules! declare_bitpacker {
         pub struct UnsafeBitPackerImpl;
 
         impl UnsafeBitPacker for UnsafeBitPackerImpl {
-
             const BLOCK_LEN: usize = BLOCK_LEN;
 
             #[$cpufeature]
@@ -339,7 +337,12 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn compress_sorted(initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
+            unsafe fn compress_sorted(
+                initial: u32,
+                decompressed: &[u32],
+                compressed: &mut [u8],
+                num_bits: u8,
+            ) -> usize {
                 let delta_computer = DeltaComputer {
                     previous: set1(initial as i32),
                 };
@@ -347,7 +350,11 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
+            unsafe fn decompress(
+                compressed: &[u8],
+                decompressed: &mut [u32],
+                num_bits: u8,
+            ) -> usize {
                 assert!(
                     decompressed.len() >= BLOCK_LEN,
                     "The output array is not large enough : ({} >= {})",
@@ -360,7 +367,12 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
-            unsafe fn decompress_sorted(initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
+            unsafe fn decompress_sorted(
+                initial: u32,
+                compressed: &[u8],
+                decompressed: &mut [u32],
+                num_bits: u8,
+            ) -> usize {
                 assert!(
                     decompressed.len() >= BLOCK_LEN,
                     "The output array is not large enough : ({} >= {})",
@@ -385,7 +397,7 @@ macro_rules! declare_bitpacker {
                 unroll! {
                     for iter in 0..31 {
                         let i = iter + 1;
-                        let newvec = load_unaligned(data.offset(i as isize));
+                        let newvec = load_unaligned(data.add(i));
                         accumulator = op_or(accumulator, newvec);
                     }
                 }
@@ -404,13 +416,13 @@ macro_rules! declare_bitpacker {
                 unroll! {
                     for iter in 0..30 {
                         let i = iter + 1;
-                        let current = load_unaligned(data.offset(i as isize));
+                        let current = load_unaligned(data.add(i));
                         let delta = compute_delta(current, previous);
                         accumulator =  op_or(accumulator, delta);
                         previous = current;
                     }
                 }
-                let current = load_unaligned(data.offset(31 as isize));
+                let current = load_unaligned(data.add(31));
                 let delta = compute_delta(current, previous);
                 accumulator = op_or(accumulator, delta);
                 most_significant_bit(or_collapse_to_u32(accumulator))
@@ -419,9 +431,9 @@ macro_rules! declare_bitpacker {
 
         #[cfg(test)]
         mod tests {
-            use Available;
-            use tests::test_suite_compress_decompress;
             use super::UnsafeBitPackerImpl;
+            use tests::test_suite_compress_decompress;
+            use Available;
 
             #[test]
             fn test_bitpacker() {

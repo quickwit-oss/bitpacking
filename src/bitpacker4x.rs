@@ -5,22 +5,24 @@ use Available;
 
 const BLOCK_LEN: usize = 32 * 4;
 
-
-#[cfg(any(target_arch="x86_64"))]
+#[cfg(any(target_arch = "x86_64"))]
 mod sse3 {
 
     use super::BLOCK_LEN;
     use Available;
 
     use std::arch::x86_64::__m128i as DataType;
-    use std::arch::x86_64::_mm_set1_epi32 as set1;
-    use std::arch::x86_64::_mm_srli_epi32 as right_shift_32;
-    use std::arch::x86_64::_mm_slli_epi32 as left_shift_32;
-    use std::arch::x86_64::_mm_or_si128 as op_or;
     use std::arch::x86_64::_mm_and_si128 as op_and;
     use std::arch::x86_64::_mm_lddqu_si128 as load_unaligned;
+    use std::arch::x86_64::_mm_or_si128 as op_or;
+    use std::arch::x86_64::_mm_set1_epi32 as set1;
+    use std::arch::x86_64::_mm_slli_epi32 as left_shift_32;
+    use std::arch::x86_64::_mm_srli_epi32 as right_shift_32;
     use std::arch::x86_64::_mm_storeu_si128 as store_unaligned;
-    use std::arch::x86_64::{_mm_add_epi32,  _mm_shuffle_epi32, _mm_srli_si128, _mm_sub_epi32, _mm_slli_si128, _mm_cvtsi128_si32};
+    use std::arch::x86_64::{
+        _mm_add_epi32, _mm_cvtsi128_si32, _mm_shuffle_epi32, _mm_slli_si128, _mm_srli_si128,
+        _mm_sub_epi32,
+    };
 
     #[allow(non_snake_case)]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
@@ -32,15 +34,15 @@ mod sse3 {
         _mm_cvtsi128_si32(_______cadb) as u32
     }
 
-    #[target_feature(enable="sse3")]
+    #[target_feature(enable = "sse3")]
     unsafe fn compute_delta(curr: DataType, prev: DataType) -> DataType {
-        _mm_sub_epi32(curr,
-                      op_or(_mm_slli_si128(curr, 4),
-                            _mm_srli_si128(prev, 12))
+        _mm_sub_epi32(
+            curr,
+            op_or(_mm_slli_si128(curr, 4), _mm_srli_si128(prev, 12)),
         )
     }
 
-    #[target_feature(enable="sse3")]
+    #[target_feature(enable = "sse3")]
     #[allow(non_snake_case)]
     unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
         let offset = _mm_shuffle_epi32(prev, 0xff);
@@ -52,7 +54,7 @@ mod sse3 {
         _mm_add_epi32(offset, a_ab_abc_abcd)
     }
 
-    declare_bitpacker!(target_feature(enable="sse3"));
+    declare_bitpacker!(target_feature(enable = "sse3"));
 
     impl Available for UnsafeBitPackerImpl {
         fn available() -> bool {
@@ -64,42 +66,49 @@ mod sse3 {
 mod scalar {
 
     use super::BLOCK_LEN;
-    use Available;
     use std::ptr;
+    use Available;
 
     type DataType = [u32; 4];
-
 
     fn set1(el: i32) -> DataType {
         [el as u32; 4]
     }
 
     fn right_shift_32(el: DataType, shift: i32) -> DataType {
-        [el[0] >> shift,
-         el[1] >> shift,
-         el[2] >> shift,
-         el[3] >> shift]
+        [
+            el[0] >> shift,
+            el[1] >> shift,
+            el[2] >> shift,
+            el[3] >> shift,
+        ]
     }
 
     fn left_shift_32(el: DataType, shift: i32) -> DataType {
-        [el[0] << shift,
-         el[1] << shift,
-         el[2] << shift,
-         el[3] << shift]
+        [
+            el[0] << shift,
+            el[1] << shift,
+            el[2] << shift,
+            el[3] << shift,
+        ]
     }
 
     fn op_or(left: DataType, right: DataType) -> DataType {
-        [left[0] | right[0],
-         left[1] | right[1],
-         left[2] | right[2],
-         left[3] | right[3]]
+        [
+            left[0] | right[0],
+            left[1] | right[1],
+            left[2] | right[2],
+            left[3] | right[3],
+        ]
     }
 
     fn op_and(left: DataType, right: DataType) -> DataType {
-        [left[0] & right[0],
-         left[1] & right[1],
-         left[2] & right[2],
-         left[3] & right[3]]
+        [
+            left[0] & right[0],
+            left[1] & right[1],
+            left[2] & right[2],
+            left[3] & right[3],
+        ]
     }
 
     unsafe fn load_unaligned(addr: *const DataType) -> DataType {
@@ -131,12 +140,11 @@ mod scalar {
         [el0, el1, el2, el3]
     }
 
-
     // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.
     //
     // For other bitpacker, we enable specific CPU instruction set, but for the
     // scalar bitpacker none is required.
-    declare_bitpacker!(cfg(any(debug, not(debug))) );
+    declare_bitpacker!(cfg(any(debug, not(debug))));
 
     impl Available for UnsafeBitPackerImpl {
         fn available() -> bool {
@@ -149,9 +157,8 @@ mod scalar {
 enum InstructionSet {
     #[cfg(target_arch = "x86_64")]
     SSE3,
-    Scalar
+    Scalar,
 }
-
 
 /// `BitPacker4x` packs integers in groups of 4. This gives an opportunity
 /// to leverage `SSE3` instructions to encode and decode the stream.
@@ -161,9 +168,7 @@ enum InstructionSet {
 pub struct BitPacker4x(InstructionSet);
 
 impl BitPacker for BitPacker4x {
-
     const BLOCK_LEN: usize = BLOCK_LEN;
-
 
     /// Returns the best available implementation for the current CPU.
     fn new() -> Self {
@@ -180,22 +185,38 @@ impl BitPacker for BitPacker4x {
         unsafe {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 =>
-                    sse3::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits),
-                InstructionSet::Scalar =>
+                InstructionSet::SSE3 => {
+                    sse3::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
+                }
+                InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
+                }
             }
         }
     }
 
-    fn compress_sorted(&self, initial: u32, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
+    fn compress_sorted(
+        &self,
+        initial: u32,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize {
         unsafe {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 =>
-                    sse3::UnsafeBitPackerImpl::compress_sorted(initial, decompressed, compressed, num_bits),
-                InstructionSet::Scalar =>
-                    scalar::UnsafeBitPackerImpl::compress_sorted(initial, decompressed, compressed, num_bits)
+                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::compress_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::compress_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
             }
         }
     }
@@ -204,22 +225,38 @@ impl BitPacker for BitPacker4x {
         unsafe {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 =>
-                    sse3::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits),
-                InstructionSet::Scalar =>
-                    scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits),
+                InstructionSet::SSE3 => {
+                    sse3::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
+                }
+                InstructionSet::Scalar => {
+                    scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
+                }
             }
         }
     }
 
-    fn decompress_sorted(&self, initial: u32, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
+    fn decompress_sorted(
+        &self,
+        initial: u32,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize {
         unsafe {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 =>
-                    sse3::UnsafeBitPackerImpl::decompress_sorted(initial, compressed, decompressed, num_bits),
-                InstructionSet::Scalar =>
-                    scalar::UnsafeBitPackerImpl::decompress_sorted(initial, compressed, decompressed, num_bits)
+                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::decompress_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::decompress_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
             }
         }
     }
@@ -228,10 +265,8 @@ impl BitPacker for BitPacker4x {
         unsafe {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 =>
-                    sse3::UnsafeBitPackerImpl::num_bits(decompressed),
-                InstructionSet::Scalar =>
-                    scalar::UnsafeBitPackerImpl::num_bits(decompressed)
+                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::num_bits(decompressed),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::num_bits(decompressed),
             }
         }
     }
@@ -240,10 +275,12 @@ impl BitPacker for BitPacker4x {
         unsafe {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 =>
-                    sse3::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed),
-                InstructionSet::Scalar =>
+                InstructionSet::SSE3 => {
+                    sse3::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                }
+                InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                }
             }
         }
     }
@@ -252,15 +289,17 @@ impl BitPacker for BitPacker4x {
 #[cfg(target_arch = "x86_64")]
 #[cfg(test)]
 mod tests {
-    use Available;
+    use super::BLOCK_LEN;
     use super::{scalar, sse3};
     use tests::test_util_compatible;
-    use super::BLOCK_LEN;
+    use Available;
 
     #[test]
     fn test_compatible() {
         if sse3::UnsafeBitPackerImpl::available() {
-            test_util_compatible::<scalar::UnsafeBitPackerImpl, sse3::UnsafeBitPackerImpl>(BLOCK_LEN);
+            test_util_compatible::<scalar::UnsafeBitPackerImpl, sse3::UnsafeBitPackerImpl>(
+                BLOCK_LEN,
+            );
         }
     }
 }
