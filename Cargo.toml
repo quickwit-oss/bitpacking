@@ -8,7 +8,7 @@ keywords = ["integer", "compression", "bitpacking"]
 description = "Fast integer compression/decompression via SIMD bit-packing. Port of simdcomp to rust."
 
 [dependencies]
-crunchy = "0.1.6"
+crunchy = "0.2.2"
 
 [dev-dependencies]
 rand = "0.3"
