@@ -434,6 +434,25 @@ macro_rules! declare_bitpacker {
             use super::UnsafeBitPackerImpl;
             use tests::test_suite_compress_decompress;
             use Available;
+            use UnsafeBitPacker;
+
+            #[test]
+            fn test_num_bits() {
+                if UnsafeBitPackerImpl::available() {
+                    for num_bits in 0..32 {
+                        for pos in 0..32 {
+                            let mut vals = [0u32; UnsafeBitPackerImpl::BLOCK_LEN];
+                            if num_bits > 0 {
+                                vals[pos] = 1 << (num_bits - 1);
+                            }
+                            assert_eq!(
+                                unsafe { UnsafeBitPackerImpl::num_bits(&vals[..]) },
+                                num_bits
+                            );
+                        }
+                    }
+                }
+            }
 
             #[test]
             fn test_bitpacker() {

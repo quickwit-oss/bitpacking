@@ -28,12 +28,12 @@ mod avx2 {
     #[allow(non_snake_case)]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
         let a__b__c__d__e__f__g__h_ = accumulator;
-        let ______a__b__c__d__e__f = _mm256_srli_si256(a__b__c__d__e__f__g__h_, 8);
-        let a__b__ca_db_ce_df_ge_hf = op_or(a__b__c__d__e__f__g__h_, ______a__b__c__d__e__f);
-        let ___a__b__ca_db_ce_df_ge = _mm256_srli_si256(a__b__ca_db_ce_df_ge_hf, 4);
-        let _________cadb_________gehf = op_or(a__b__ca_db_ce_df_ge_hf, ___a__b__ca_db_ce_df_ge);
-        let cadb = _mm256_extract_epi32(_________cadb_________gehf, 4);
-        let gehf = _mm256_extract_epi32(_________cadb_________gehf, 4);
+        let ______a__b________e__f = _mm256_srli_si256(a__b__c__d__e__f__g__h_, 8);
+        let a__b__ca_db_e__f__ge_hf = op_or(a__b__c__d__e__f__g__h_, ______a__b________e__f);
+        let ___a__b__ca____e__f__ge = _mm256_srli_si256(a__b__ca_db_e__f__ge_hf, 4);
+        let _________cadb______gehf = op_or(a__b__ca_db_e__f__ge_hf, ___a__b__ca____e__f__ge);
+        let cadb = _mm256_extract_epi32(_________cadb______gehf, 0);
+        let gehf = _mm256_extract_epi32(_________cadb______gehf, 4);
         (cadb | gehf) as u32
     }
 
