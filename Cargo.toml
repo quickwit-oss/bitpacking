@@ -14,6 +14,13 @@ crunchy = "0.2.2"
 rand = "0.7"
 criterion = "0.2"
 
+[features]
+bitpacker1x = []
+bitpacker4x = []
+bitpacker8x = []
+
+default = ["bitpacker1x", "bitpacker4x", "bitpacker8x", ]
+
 [[bench]]
 name = "bitpacking_bench"
 path = "src/bitpacking_bench.rs"
