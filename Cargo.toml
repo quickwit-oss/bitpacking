@@ -11,8 +11,15 @@ description = "Fast integer compression/decompression via SIMD bit-packing. Port
 crunchy = "0.2.2"
 
 [dev-dependencies]
-rand = "0.6"
+rand = "0.7"
 criterion = "0.2"
+
+[features]
+bitpacker1x = []
+bitpacker4x = []
+bitpacker8x = []
+
+default = ["bitpacker1x", "bitpacker4x", "bitpacker8x", ]
 
 [[bench]]
 name = "bitpacking_bench"
