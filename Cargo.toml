@@ -1,6 +1,6 @@
 [package]
 name = "bitpacking"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Paul Masurel <paul.masurel@gmail.com>"]
 license = "MIT"
 readme = "README.md"
