@@ -23,9 +23,6 @@ See the [`BitPacker` trait](./trait.BitPacker.html) for example usage.
 #![allow(unused_unsafe)]
 #![warn(missing_docs)]
 
-#[macro_use]
-extern crate crunchy;
-
 use std::marker::Sized;
 
 #[cfg(test)]
@@ -277,3 +274,49 @@ pub use bitpacker1x::BitPacker1x;
 pub use bitpacker4x::BitPacker4x;
 #[cfg(feature = "bitpacker8x")]
 pub use bitpacker8x::BitPacker8x;
+
+#[cfg(test)]
+mod functional_tests {
+    use crate::{BitPacker, BitPacker4x};
+    use proptest::prelude::*;
+
+    proptest! {
+        #[test]
+        #[ignore]
+        fn check_block(
+            values in prop::collection::vec(u32::arbitrary(), BitPacker4x::BLOCK_LEN),
+        ) {
+            let bit_packer = BitPacker4x::new();
+            let bit_width = bit_packer.num_bits(&*values);
+
+            let mut block = vec![0u8; BitPacker4x::compressed_block_size(bit_width)];
+            bit_packer.compress(&values, &mut block, bit_width);
+
+            let mut decoded_values = vec![0x10101010; BitPacker4x::BLOCK_LEN];
+            bit_packer.decompress(&block, &mut decoded_values, bit_width);
+
+            prop_assert_eq!(values, decoded_values);
+        }
+
+        #[ignore]
+        #[test]
+        fn check_sorted_block(
+            (values, init_value) in prop::collection::vec(u32::arbitrary(), BitPacker4x::BLOCK_LEN).prop_flat_map(|mut values| {
+                values.sort();
+                let min_value = values[0];
+                (Just(values), (0..=min_value))
+            }),
+        ) {
+            let bit_packer = BitPacker4x::new();
+            let bit_width = bit_packer.num_bits_sorted(init_value, &*values);
+
+            let mut block = vec![0u8; BitPacker4x::compressed_block_size(bit_width)];
+            bit_packer.compress_sorted(init_value, &values, &mut block, bit_width);
+
+            let mut decoded_values = vec![0x10101010; BitPacker4x::BLOCK_LEN];
+            bit_packer.decompress_sorted(init_value, &block, &mut decoded_values, bit_width);
+
+            prop_assert_eq!(values, decoded_values);
+        }
+    }
+}

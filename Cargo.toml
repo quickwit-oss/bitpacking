@@ -1,11 +1,12 @@
 [package]
 name = "bitpacking"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Paul Masurel <paul.masurel@gmail.com>"]
 license = "MIT"
 readme = "README.md"
 keywords = ["integer", "compression", "bitpacking"]
 description = "Fast integer compression/decompression via SIMD bit-packing. Port of simdcomp to rust."
+edition = "2018"
 
 [dependencies]
 crunchy = "0.2.2"
@@ -13,6 +14,7 @@ crunchy = "0.2.2"
 [dev-dependencies]
 rand = "0.7"
 criterion = "0.2"
+proptest = "0.9.4"
 
 [features]
 bitpacker1x = []

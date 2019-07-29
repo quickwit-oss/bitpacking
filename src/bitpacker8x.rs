@@ -1,7 +1,7 @@
 use super::{BitPacker, UnsafeBitPacker};
 
 #[cfg(target_arch = "x86_64")]
-use Available;
+use crate::Available;
 
 const BLOCK_LEN: usize = 32 * 8;
 
@@ -9,7 +9,7 @@ const BLOCK_LEN: usize = 32 * 8;
 mod avx2 {
 
     use super::BLOCK_LEN;
-    use Available;
+    use crate::Available;
 
     use std::arch::x86_64::__m256i as DataType;
     use std::arch::x86_64::_mm256_and_si256 as op_and;
@@ -77,8 +77,8 @@ mod avx2 {
 mod scalar {
 
     use super::BLOCK_LEN;
+    use crate::Available;
     use std::ptr;
-    use Available;
 
     type DataType = [u32; 8];
 
@@ -325,8 +325,8 @@ impl BitPacker for BitPacker8x {
 mod tests {
     use super::BLOCK_LEN;
     use super::{avx2, scalar};
-    use tests::test_util_compatible;
-    use Available;
+    use crate::tests::test_util_compatible;
+    use crate::Available;
 
     #[test]
     fn test_compatible() {

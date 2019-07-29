@@ -1,7 +1,7 @@
 use super::{BitPacker, UnsafeBitPacker};
 
 #[cfg(target_arch = "x86_64")]
-use Available;
+use crate::Available;
 
 const BLOCK_LEN: usize = 32 * 4;
 
@@ -9,7 +9,7 @@ const BLOCK_LEN: usize = 32 * 4;
 mod sse3 {
 
     use super::BLOCK_LEN;
-    use Available;
+    use crate::Available;
 
     use std::arch::x86_64::__m128i as DataType;
     use std::arch::x86_64::_mm_and_si128 as op_and;
@@ -66,8 +66,8 @@ mod sse3 {
 mod scalar {
 
     use super::BLOCK_LEN;
+    use crate::Available;
     use std::ptr;
-    use Available;
 
     type DataType = [u32; 4];
 
@@ -291,8 +291,9 @@ impl BitPacker for BitPacker4x {
 mod tests {
     use super::BLOCK_LEN;
     use super::{scalar, sse3};
-    use tests::test_util_compatible;
-    use Available;
+    use crate::tests::test_util_compatible;
+    use crate::Available;
+    use crate::{BitPacker, BitPacker4x};
 
     #[test]
     fn test_compatible() {
@@ -301,5 +302,38 @@ mod tests {
                 BLOCK_LEN,
             );
         }
+    }
+
+    #[test]
+    fn test_delta_bit_width_32() {
+        let values = vec![i32::max_value() as u32 + 1; BitPacker4x::BLOCK_LEN];
+        let bit_packer = BitPacker4x::new();
+        let bit_width = bit_packer.num_bits_sorted(0, &values);
+        assert_eq!(bit_width, 32);
+
+        let mut block = vec![0u8; BitPacker4x::compressed_block_size(bit_width)];
+        bit_packer.compress_sorted(0, &values, &mut block, bit_width);
+
+        let mut decoded_values = vec![0x10101010; BitPacker4x::BLOCK_LEN];
+        bit_packer.decompress_sorted(0, &block, &mut decoded_values, bit_width);
+
+        assert_eq!(values, decoded_values);
+    }
+
+    #[test]
+    fn test_bit_width_32() {
+        let mut values = vec![i32::max_value() as u32 + 1; BitPacker4x::BLOCK_LEN];
+        values[0] = 0;
+        let bit_packer = BitPacker4x::new();
+        let bit_width = bit_packer.num_bits(&values);
+        assert_eq!(bit_width, 32);
+
+        let mut block = vec![0u8; BitPacker4x::compressed_block_size(bit_width)];
+        bit_packer.compress(&values, &mut block, bit_width);
+
+        let mut decoded_values = vec![0x10101010; BitPacker4x::BLOCK_LEN];
+        bit_packer.decompress(&block, &mut decoded_values, bit_width);
+
+        assert_eq!(values, decoded_values);
     }
 }
