@@ -132,7 +132,7 @@ fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(
 pub(crate) fn test_suite_compress_decompress<TBitPacker: UnsafeBitPacker>(delta: bool) {
     let num_blocks = (1 << 15) / TBitPacker::BLOCK_LEN;
     let n = num_blocks * TBitPacker::BLOCK_LEN;
-    for num_bits in 0u8..32u8 {
+    for num_bits in 0u8..33u8 {
         let original = generate_array(n, num_bits);
         for i in 0..num_blocks {
             let block = &original[i * TBitPacker::BLOCK_LEN..(i + 1) * TBitPacker::BLOCK_LEN];

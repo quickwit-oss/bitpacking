@@ -2,7 +2,10 @@ macro_rules! pack_unpack_with_bits {
 
     ($name:ident, $n:expr, $cpufeature:meta) => {
 
+
         mod $name {
+
+            use crunchy::unroll;
             use super::BLOCK_LEN;
             use super::{Sink, Transformer};
             use super::{DataType,
@@ -16,7 +19,6 @@ macro_rules! pack_unpack_with_bits {
 
             const NUM_BITS: usize = $n;
             const NUM_BYTES_PER_BLOCK: usize = NUM_BITS * BLOCK_LEN / 8;
-
 
             #[$cpufeature]
             pub(crate) unsafe fn pack<TDeltaComputer: Transformer>(input_arr: &[u32], output_arr: &mut [u8], mut delta_computer: TDeltaComputer) -> usize {
@@ -56,13 +58,8 @@ macro_rules! pack_unpack_with_bits {
                     }
                 }
                 let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr.add(31)));
-                out_register =
-                    if NUM_BITS != 32 {
-                        let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
-                        op_or(out_register, shifted)
-                    } else {
-                        in_register
-                    };
+                let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
+                out_register = op_or(out_register, shifted);
                 store_unaligned(output_ptr, out_register);
 
                 NUM_BYTES_PER_BLOCK
@@ -121,10 +118,80 @@ macro_rules! pack_unpack_with_bits {
     }
 }
 
+macro_rules! pack_unpack_with_bits_32 {
+    ($cpufeature:meta) => {
+        mod pack_unpack_with_bits_32 {
+            use super::BLOCK_LEN;
+            use super::{load_unaligned, store_unaligned, DataType};
+            use super::{Sink, Transformer};
+            use crunchy::unroll;
+
+            const NUM_BITS: usize = 32;
+            const NUM_BYTES_PER_BLOCK: usize = NUM_BITS * BLOCK_LEN / 8;
+
+            #[$cpufeature]
+            pub(crate) unsafe fn pack<TDeltaComputer: Transformer>(
+                input_arr: &[u32],
+                output_arr: &mut [u8],
+                mut delta_computer: TDeltaComputer,
+            ) -> usize {
+                assert_eq!(
+                    input_arr.len(),
+                    BLOCK_LEN,
+                    "Input block too small {}, (expected {})",
+                    input_arr.len(),
+                    BLOCK_LEN
+                );
+                assert!(
+                    output_arr.len() >= NUM_BYTES_PER_BLOCK,
+                    "Output array too small (numbits {}). {} <= {}",
+                    NUM_BITS,
+                    output_arr.len(),
+                    NUM_BYTES_PER_BLOCK
+                );
+
+                let input_ptr: *const DataType = input_arr.as_ptr() as *const DataType;
+                let output_ptr = output_arr.as_mut_ptr() as *mut DataType;
+                unroll! {
+                    for i in 0..32 {
+                        let input_offset_ptr = input_ptr.offset(i as isize);
+                        let output_offset_ptr = output_ptr.offset(i as isize);
+                        let input_register = load_unaligned(input_offset_ptr);
+                        let output_register = delta_computer.transform(input_register);
+                        store_unaligned(output_offset_ptr, output_register);
+                    }
+                }
+                NUM_BYTES_PER_BLOCK
+            }
+
+            #[$cpufeature]
+            pub(crate) unsafe fn unpack<Output: Sink>(
+                compressed: &[u8],
+                mut output: Output,
+            ) -> usize {
+                assert!(
+                    compressed.len() >= NUM_BYTES_PER_BLOCK,
+                    "Compressed array seems too small. ({} < {}) ",
+                    compressed.len(),
+                    NUM_BYTES_PER_BLOCK
+                );
+                let input_ptr = compressed.as_ptr() as *const DataType;
+                for i in 0..32 {
+                    let input_offset_ptr = input_ptr.offset(i as isize);
+                    let in_register: DataType = load_unaligned(input_offset_ptr);
+                    output.process(in_register);
+                }
+                NUM_BYTES_PER_BLOCK
+            }
+        }
+    };
+}
+
 macro_rules! declare_bitpacker {
     ($cpufeature:meta) => {
         use super::super::UnsafeBitPacker;
-        use most_significant_bit;
+        use crate::most_significant_bit;
+        use crunchy::unroll;
 
         pack_unpack_with_bits!(pack_unpack_with_bits_1, 1, $cpufeature);
         pack_unpack_with_bits!(pack_unpack_with_bits_2, 2, $cpufeature);
@@ -157,7 +224,7 @@ macro_rules! declare_bitpacker {
         pack_unpack_with_bits!(pack_unpack_with_bits_29, 29, $cpufeature);
         pack_unpack_with_bits!(pack_unpack_with_bits_30, 30, $cpufeature);
         pack_unpack_with_bits!(pack_unpack_with_bits_31, 31, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_32, 32, $cpufeature);
+        pack_unpack_with_bits_32!($cpufeature);
 
         unsafe fn compress_generic<DeltaComputer: Transformer>(
             decompressed: &[u32],
@@ -432,9 +499,9 @@ macro_rules! declare_bitpacker {
         #[cfg(test)]
         mod tests {
             use super::UnsafeBitPackerImpl;
-            use tests::test_suite_compress_decompress;
-            use Available;
-            use UnsafeBitPacker;
+            use crate::tests::test_suite_compress_decompress;
+            use crate::Available;
+            use crate::UnsafeBitPacker;
 
             #[test]
             fn test_num_bits() {

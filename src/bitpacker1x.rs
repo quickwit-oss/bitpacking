@@ -7,7 +7,7 @@ mod scalar {
     use std::ptr::write_unaligned as store_unaligned;
 
     use super::BLOCK_LEN;
-    use Available;
+    use crate::Available;
 
     type DataType = u32;
 
