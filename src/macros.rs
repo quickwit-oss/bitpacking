@@ -19,6 +19,7 @@ macro_rules! pack_unpack_with_bits {
 
 
             #[$cpufeature]
+            #[inline(never)]
             pub(crate) unsafe fn pack<TDeltaComputer: Transformer>(input_arr: &[u32], output_arr: &mut [u8], mut delta_computer: TDeltaComputer) -> usize {
                 assert_eq!(input_arr.len(), BLOCK_LEN, "Input block too small {}, (expected {})", input_arr.len(), BLOCK_LEN);
                 assert!(output_arr.len() >= NUM_BYTES_PER_BLOCK, "Output array too small (numbits {}). {} <= {}", NUM_BITS, output_arr.len(), NUM_BYTES_PER_BLOCK);
@@ -69,6 +70,7 @@ macro_rules! pack_unpack_with_bits {
             }
 
             #[$cpufeature]
+            #[inline(never)]
             pub(crate) unsafe fn unpack<Output: Sink>(compressed: &[u8], mut output: Output) -> usize {
 
                 assert!(compressed.len() >= NUM_BYTES_PER_BLOCK, "Compressed array seems too small. ({} < {}) ", compressed.len(), NUM_BYTES_PER_BLOCK);

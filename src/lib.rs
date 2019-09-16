@@ -264,12 +264,16 @@ fn most_significant_bit(v: u32) -> u8 {
     }
 }
 
+mod bitpacker2x;
+
 #[cfg(feature = "bitpacker1x")]
 mod bitpacker1x;
 #[cfg(feature = "bitpacker4x")]
 mod bitpacker4x;
 #[cfg(feature = "bitpacker8x")]
 mod bitpacker8x;
+
+pub use bitpacker2x::BitPacker2x;
 
 #[cfg(feature = "bitpacker1x")]
 pub use bitpacker1x::BitPacker1x;
