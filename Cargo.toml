@@ -1,6 +1,6 @@
 [package]
 name = "bitpacking"
-version = "0.8.1"
+version = "0.8.2"
 authors = ["Paul Masurel <paul.masurel@gmail.com>"]
 license = "MIT"
 readme = "README.md"
@@ -9,7 +9,7 @@ description = "Fast integer compression/decompression via SIMD bit-packing. Port
 edition = "2018"
 
 [dependencies]
-crunchy = "0.2.2"
+crunchy = "0.2"
 
 [dev-dependencies]
 rand = "0.7"
@@ -20,8 +20,7 @@ proptest = "0.9.4"
 bitpacker1x = []
 bitpacker4x = []
 bitpacker8x = []
-
-default = ["bitpacker1x", "bitpacker4x", "bitpacker8x", ]
+default = ["bitpacker1x", "bitpacker4x", "bitpacker8x"]
 
 [[bench]]
 name = "bitpacking_bench"

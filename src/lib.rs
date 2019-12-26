@@ -31,6 +31,8 @@ pub(crate) mod tests;
 
 #[macro_use]
 mod macros;
+#[macro_use]
+mod macros_simple;
 
 trait Available {
     fn available() -> bool;
@@ -263,15 +265,23 @@ fn most_significant_bit(v: u32) -> u8 {
 
 #[cfg(feature = "bitpacker1x")]
 mod bitpacker1x;
-#[cfg(feature = "bitpacker4x")]
+#[cfg(all(feature = "bitpacker4x", not(debug_assertions)))]
 mod bitpacker4x;
+
+#[cfg(all(feature = "bitpacker4x", debug_assertions))]
+mod bitpacker4x_simple;
+
 #[cfg(feature = "bitpacker8x")]
 mod bitpacker8x;
 
 #[cfg(feature = "bitpacker1x")]
 pub use bitpacker1x::BitPacker1x;
-#[cfg(feature = "bitpacker4x")]
+
+#[cfg(all(feature = "bitpacker4x", not(debug_assertions)))]
 pub use bitpacker4x::BitPacker4x;
+#[cfg(all(feature = "bitpacker4x", debug_assertions))]
+pub use bitpacker4x_simple::BitPacker4x;
+
 #[cfg(feature = "bitpacker8x")]
 pub use bitpacker8x::BitPacker8x;
 

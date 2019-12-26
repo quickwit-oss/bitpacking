@@ -1,3 +1,7 @@
+# bitpacking 0.8.2
+
+- Much much faster compilation in debug mode. (#20)
+
 # bitpacking 0.8.1
 
 - Bugfix for arrays requiring 32-bits. (#17)
