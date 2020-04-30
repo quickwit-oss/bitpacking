@@ -241,11 +241,19 @@ pub trait BitPacker: Sized + Clone + Copy {
     ) -> usize;
 
     /// Returns the minimum number of bits used to represent the largest integer in the
-    /// `decompressed` array.
+    /// `decompressed` block.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `decompressed`'s len is not exactly `BLOCK_LEN`.
     fn num_bits(&self, decompressed: &[u32]) -> u8;
 
     /// Returns the minimum number of bits used to represent the largest `delta` in the deltas in the
-    /// `decompressed` array.
+    /// `decompressed` block.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `decompressed`'s len is not exactly `BLOCK_LEN`.
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8;
 
     /// Returns the size of a compressed block.
@@ -284,6 +292,27 @@ pub use bitpacker4x_simple::BitPacker4x;
 
 #[cfg(feature = "bitpacker8x")]
 pub use bitpacker8x::BitPacker8x;
+
+#[cfg(test)]
+mod tests_unit {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "`decompressed`'s len is not `BLOCK_LEN=128`")]
+    fn test_num_bits_block_too_long() {
+        let bit_packer = BitPacker4x::new();
+        let v = vec![0u32; BitPacker4x::BLOCK_LEN + 1];
+        bit_packer.num_bits(&v[..]);
+    }
+
+    #[test]
+    #[should_panic(expected = "`decompressed`'s len is not `BLOCK_LEN=128`")]
+    fn test_num_bits_block_too_short() {
+        let bit_packer = BitPacker4x::new();
+        let v = vec![0u32; BitPacker4x::BLOCK_LEN - 1];
+        bit_packer.num_bits(&v[..]);
+    }
+}
 
 #[cfg(test)]
 mod functional_tests {
