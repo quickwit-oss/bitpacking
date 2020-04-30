@@ -13,7 +13,7 @@ crunchy = "0.2"
 
 [dev-dependencies]
 rand = "0.7"
-criterion = "0.2"
+criterion = "0.3"
 proptest = "0.9.4"
 
 [features]
