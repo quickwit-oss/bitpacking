@@ -473,6 +473,12 @@ macro_rules! declare_bitpacker {
 
             #[$cpufeature]
             unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
+                assert_eq!(
+                    decompressed.len(),
+                    BLOCK_LEN,
+                    "`decompressed`'s len is not `BLOCK_LEN={}`",
+                    BLOCK_LEN
+                );
                 let initial_vec = set1(initial as i32);
                 let data: *const DataType = decompressed.as_ptr() as *const DataType;
 
