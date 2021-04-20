@@ -25,6 +25,7 @@ mod sse3 {
     };
 
     #[allow(non_snake_case)]
+    #[inline(always)]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
         let a__b__c__d_ = accumulator;
         let ______a__b_ = _mm_srli_si128(a__b__c__d_, 8);

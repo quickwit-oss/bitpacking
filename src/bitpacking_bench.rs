@@ -159,7 +159,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
                 bench_decompress_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
-                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u32,
+                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
         );
         criterion.bench(
@@ -168,7 +168,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
                 bench_decompress_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
-                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u32,
+                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
         );
         criterion.bench(
@@ -177,7 +177,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
                 bench_compress_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
-                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u32,
+                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
         );
         criterion.bench(
@@ -186,7 +186,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
                 bench_compress_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
-                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u32,
+                (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
         );
     }

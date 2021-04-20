@@ -279,6 +279,7 @@ macro_rules! declare_bitpacker {
         struct NoDelta;
 
         impl Transformer for NoDelta {
+            #[inline(always)]
             unsafe fn transform(&mut self, current: DataType) -> DataType {
                 current
             }
@@ -289,6 +290,7 @@ macro_rules! declare_bitpacker {
         }
 
         impl Transformer for DeltaComputer {
+            #[inline(always)]
             unsafe fn transform(&mut self, current: DataType) -> DataType {
                 let result = compute_delta(current, self.previous);
                 self.previous = current;
