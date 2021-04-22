@@ -279,7 +279,7 @@ macro_rules! declare_bitpacker {
         struct NoDelta;
 
         impl Transformer for NoDelta {
-            #[inline(always)]
+            #[inline]
             unsafe fn transform(&mut self, current: DataType) -> DataType {
                 current
             }
@@ -290,7 +290,7 @@ macro_rules! declare_bitpacker {
         }
 
         impl Transformer for DeltaComputer {
-            #[inline(always)]
+            #[inline]
             unsafe fn transform(&mut self, current: DataType) -> DataType {
                 let result = compute_delta(current, self.previous);
                 self.previous = current;
@@ -327,7 +327,7 @@ macro_rules! declare_bitpacker {
         }
 
         impl Sink for DeltaIntegrate {
-            #[inline(always)]
+            #[inline]
             unsafe fn process(&mut self, delta: DataType) {
                 self.current = integrate_delta(self.current, delta);
                 store_unaligned(self.output_ptr, self.current);
@@ -336,14 +336,14 @@ macro_rules! declare_bitpacker {
         }
 
         impl Sink for Store {
-            #[inline(always)]
+            #[inline]
             unsafe fn process(&mut self, out_register: DataType) {
                 store_unaligned(self.output_ptr, out_register);
                 self.output_ptr = self.output_ptr.add(1);
             }
         }
 
-        #[inline(always)]
+        #[inline]
         unsafe fn decompress_to<Output: Sink>(
             compressed: &[u8],
             mut sink: Output,
