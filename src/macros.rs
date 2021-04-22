@@ -343,6 +343,7 @@ macro_rules! declare_bitpacker {
             }
         }
 
+        #[inline]
         unsafe fn decompress_to<Output: Sink>(
             compressed: &[u8],
             mut sink: Output,
