@@ -25,7 +25,7 @@ mod sse3 {
     };
 
     #[allow(non_snake_case)]
-    #[inline(always)]
+    #[inline]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
         let a__b__c__d_ = accumulator;
         let ______a__b_ = _mm_srli_si128(a__b__c__d_, 8);
@@ -45,6 +45,7 @@ mod sse3 {
 
     #[target_feature(enable = "sse3")]
     #[allow(non_snake_case)]
+    #[inline]
     unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
         let offset = _mm_shuffle_epi32(prev, 0xff);
         let a__b__c__d_ = delta;

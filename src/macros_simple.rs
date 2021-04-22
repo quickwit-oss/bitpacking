@@ -220,7 +220,7 @@ macro_rules! declare_bitpacker_simple {
         }
 
         impl Sink for DeltaIntegrate {
-            #[inline(always)]
+            #[inline]
             unsafe fn process(&mut self, delta: DataType) {
                 self.current = integrate_delta(self.current, delta);
                 store_unaligned(self.output_ptr, self.current);
@@ -229,7 +229,7 @@ macro_rules! declare_bitpacker_simple {
         }
 
         impl Sink for Store {
-            #[inline(always)]
+            #[inline]
             unsafe fn process(&mut self, out_register: DataType) {
                 store_unaligned(self.output_ptr, out_register);
                 self.output_ptr = self.output_ptr.add(1);
