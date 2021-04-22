@@ -35,7 +35,7 @@ mod sse3 {
         _mm_cvtsi128_si32(_______cadb) as u32
     }
 
-    #[target_feature(enable = "sse3")]
+    #[inline(always)]
     unsafe fn compute_delta(curr: DataType, prev: DataType) -> DataType {
         _mm_sub_epi32(
             curr,
@@ -43,8 +43,8 @@ mod sse3 {
         )
     }
 
-    #[target_feature(enable = "sse3")]
     #[allow(non_snake_case)]
+    #[inline(always)]
     unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
         let offset = _mm_shuffle_epi32(prev, 0xff);
         let a__b__c__d_ = delta;
@@ -58,6 +58,7 @@ mod sse3 {
     declare_bitpacker!(target_feature(enable = "sse3"));
 
     impl Available for UnsafeBitPackerImpl {
+        #[inline(always)]
         fn available() -> bool {
             is_x86_feature_detected!("sse3")
         }
@@ -112,18 +113,22 @@ mod scalar {
         ]
     }
 
+    #[inline(always)]
     unsafe fn load_unaligned(addr: *const DataType) -> DataType {
         ptr::read_unaligned(addr)
     }
 
+    #[inline(always)]
     unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
         ptr::write_unaligned(addr, data);
     }
 
+    #[inline(always)]
     fn or_collapse_to_u32(accumulator: DataType) -> u32 {
         (accumulator[0] | accumulator[1]) | (accumulator[2] | accumulator[3])
     }
 
+    #[inline(always)]
     fn compute_delta(curr: DataType, prev: DataType) -> DataType {
         [
             curr[0].wrapping_sub(prev[3]),
@@ -133,6 +138,7 @@ mod scalar {
         ]
     }
 
+    #[inline(always)]
     fn integrate_delta(offset: DataType, delta: DataType) -> DataType {
         let el0 = offset[3].wrapping_add(delta[0]);
         let el1 = el0.wrapping_add(delta[1]);
@@ -148,6 +154,7 @@ mod scalar {
     declare_bitpacker!(cfg(any(debug, not(debug))));
 
     impl Available for UnsafeBitPackerImpl {
+        #[inline(always)]
         fn available() -> bool {
             true
         }

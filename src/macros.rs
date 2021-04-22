@@ -419,6 +419,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
+            #[inline(never)]
             unsafe fn decompress(
                 compressed: &[u8],
                 decompressed: &mut [u32],
@@ -436,6 +437,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
+            #[inline(never)]
             unsafe fn decompress_sorted(
                 initial: u32,
                 compressed: &[u8],
