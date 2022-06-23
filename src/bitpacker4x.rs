@@ -184,17 +184,17 @@ impl BitPacker for BitPacker4x {
     }
 
     fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
-        unsafe {
+        
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => {
-                    sse3::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
+                    unsafe { sse3::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits) }
                 }
                 InstructionSet::Scalar => {
-                    scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
+                    unsafe { scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits) }
                 }
             }
-        }
+        
     }
 
     fn compress_sorted(
@@ -204,37 +204,37 @@ impl BitPacker for BitPacker4x {
         compressed: &mut [u8],
         num_bits: u8,
     ) -> usize {
-        unsafe {
+        
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::compress_sorted(
+                InstructionSet::SSE3 => unsafe { sse3::UnsafeBitPackerImpl::compress_sorted(
                     initial,
                     decompressed,
                     compressed,
                     num_bits,
-                ),
-                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::compress_sorted(
+                ) },
+                InstructionSet::Scalar => unsafe { scalar::UnsafeBitPackerImpl::compress_sorted(
                     initial,
                     decompressed,
                     compressed,
                     num_bits,
-                ),
+                ) },
             }
-        }
+        
     }
 
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
-        unsafe {
+        
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => {
-                    sse3::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
+                    unsafe { sse3::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits) }
                 }
                 InstructionSet::Scalar => {
-                    scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
+                    unsafe { scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits) }
                 }
             }
-        }
+        
     }
 
     fn decompress_sorted(
@@ -244,33 +244,33 @@ impl BitPacker for BitPacker4x {
         decompressed: &mut [u32],
         num_bits: u8,
     ) -> usize {
-        unsafe {
+        
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::decompress_sorted(
+                InstructionSet::SSE3 => unsafe {sse3::UnsafeBitPackerImpl::decompress_sorted(
                     initial,
                     compressed,
                     decompressed,
                     num_bits,
-                ),
-                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::decompress_sorted(
+                )},
+                InstructionSet::Scalar => unsafe {scalar::UnsafeBitPackerImpl::decompress_sorted(
                     initial,
                     compressed,
                     decompressed,
                     num_bits,
-                ),
+                )},
             }
-        }
+        
     }
 
     fn num_bits(&self, decompressed: &[u32]) -> u8 {
-        unsafe {
+        
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
-                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::num_bits(decompressed),
-                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::num_bits(decompressed),
+                InstructionSet::SSE3 => unsafe { sse3::UnsafeBitPackerImpl::num_bits(decompressed) },
+                InstructionSet::Scalar => unsafe { scalar::UnsafeBitPackerImpl::num_bits(decompressed) },
             }
-        }
+        
     }
 
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
@@ -278,10 +278,10 @@ impl BitPacker for BitPacker4x {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => {
-                    sse3::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                    unsafe { sse3::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed) }
                 }
                 InstructionSet::Scalar => {
-                    scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                    unsafe { scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed) }
                 }
             }
         }
