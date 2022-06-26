@@ -42,7 +42,7 @@ macro_rules! pack_unpack_with_bits {
 
                         out_register =
                             if inner_cursor > 0 {
-                                let shifted = left_shift_32(in_register, inner_cursor as i32);
+                                let shifted = left_shift_32::<{inner_cursor as i32}>(in_register);
                                 op_or(out_register, shifted)
                             } else {
                                 in_register
@@ -52,13 +52,13 @@ macro_rules! pack_unpack_with_bits {
                             store_unaligned(output_ptr, out_register);
                             output_ptr = output_ptr.offset(1);
                             if remaining < NUM_BITS {
-                                out_register = right_shift_32(in_register, remaining as i32);
+                                out_register = right_shift_32::<{remaining as i32}>(in_register);
                             }
                         }
                     }
                 }
                 let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr.add(31)));
-                let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
+                let shifted = left_shift_32::<{32 - NUM_BITS as i32}>(in_register);
                 out_register = op_or(out_register, shifted);
                 store_unaligned(output_ptr, out_register);
 
@@ -89,7 +89,7 @@ macro_rules! pack_unpack_with_bits {
 
                         // LLVM will not emit the shift operand if
                         // `inner_cursor` is 0.
-                        let shifted_in_register = right_shift_32(in_register, inner_cursor as i32);
+                        let shifted_in_register = right_shift_32::<{inner_cursor as i32}>(in_register);
                         let mut out_register: DataType = op_and(shifted_in_register, mask);
 
                         // We consumed our current quadruplets entirely.
@@ -101,7 +101,7 @@ macro_rules! pack_unpack_with_bits {
                             // This quadruplets is actually cutting one of
                             // our `DataType`. We need to read the next one.
                             if inner_capacity < NUM_BITS {
-                                let shifted = left_shift_32(in_register, inner_capacity as i32);
+                                let shifted = left_shift_32::<{inner_capacity as i32}>(in_register);
                                 let masked = op_and(shifted, mask);
                                 out_register = op_or(out_register, masked);
                             }

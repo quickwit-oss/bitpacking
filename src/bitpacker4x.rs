@@ -1,6 +1,6 @@
 use super::{BitPacker, UnsafeBitPacker};
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 use crate::Available;
 
 const BLOCK_LEN: usize = 32 * 4;
@@ -65,6 +65,77 @@ mod sse3 {
     }
 }
 
+#[cfg(any(target_arch = "aarch64"))]
+mod aarch64 {
+
+    use super::BLOCK_LEN;
+    use crate::Available;
+
+    use std::arch::aarch64::uint32x4_t as DataType;
+    use std::arch::aarch64::vandq_u32 as op_and;
+    use std::arch::aarch64::vorrq_u32 as op_or;
+    use std::arch::aarch64::{
+        vaddq_u32, vdupq_laneq_u32, vextq_u32, vgetq_lane_u32, vld1q_u32, vmovq_n_s32, vmovq_n_u32,
+        vshlq_u32, vst1q_u32, vsubq_u32,
+    };
+    unsafe fn set1(v: i32) -> DataType {
+        vmovq_n_u32(v as u32)
+    }
+    unsafe fn load_unaligned(p: *const DataType) -> DataType {
+        let up = std::mem::transmute::<_, *const u32>(p);
+        vld1q_u32(up)
+    }
+    unsafe fn store_unaligned(p: *const DataType, v: DataType) {
+        let op = std::mem::transmute::<_, *mut u32>(p);
+        vst1q_u32(op, v)
+    }
+    use std::arch::aarch64::vshlq_n_u32 as left_shift_32;
+    unsafe fn right_shift_32<const N: i32>(v: DataType) -> DataType {
+        // Ideally we'd use vshrq_n_u32() here but it does not allow zero values and AFAICT there
+        // is no way to allow it to compile so long as macros pass N=0. Instead use vshlq_u32()
+        // with a negative value (which results in shift-right).
+        vshlq_u32(v, vmovq_n_s32(-N))
+    }
+
+    #[target_feature(enable = "neon")]
+    #[allow(non_snake_case)]
+    #[inline]
+    unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
+        let a__b__c__d_ = accumulator;
+        let c__d__b__a_ = vextq_u32(a__b__c__d_, a__b__c__d_, 2);
+        let ca_db_ca_db = op_or(a__b__c__d_, c__d__b__a_);
+        let db_ca_db_ca = vextq_u32(ca_db_ca_db, ca_db_ca_db, 1);
+        vgetq_lane_u32(op_or(ca_db_ca_db, db_ca_db_ca), 0)
+    }
+
+    #[target_feature(enable = "neon")]
+    unsafe fn compute_delta(curr: DataType, prev: DataType) -> DataType {
+        vsubq_u32(curr, vextq_u32(prev, curr, 3))
+    }
+
+    #[target_feature(enable = "neon")]
+    #[allow(non_snake_case)]
+    #[inline]
+    unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
+        let base = vdupq_laneq_u32(prev, 3);
+        let zero = vmovq_n_u32(0);
+        let a__b__c__d_ = delta;
+        let ______a__b_ = vextq_u32(zero, a__b__c__d_, 2);
+        let a__b__ca_db = vaddq_u32(______a__b_, a__b__c__d_);
+        let ___a__b__ca = vextq_u32(zero, a__b__ca_db, 3);
+        let a_ab_abc_abcd: DataType = vaddq_u32(___a__b__ca, a__b__ca_db);
+        vaddq_u32(base, a_ab_abc_abcd)
+    }
+
+    declare_bitpacker!(target_feature(enable = "neon"));
+
+    impl Available for UnsafeBitPackerImpl {
+        fn available() -> bool {
+            std::arch::is_aarch64_feature_detected!("neon")
+        }
+    }
+}
+
 mod scalar {
 
     use super::BLOCK_LEN;
@@ -77,22 +148,12 @@ mod scalar {
         [el as u32; 4]
     }
 
-    fn right_shift_32(el: DataType, shift: i32) -> DataType {
-        [
-            el[0] >> shift,
-            el[1] >> shift,
-            el[2] >> shift,
-            el[3] >> shift,
-        ]
+    fn right_shift_32<const N: i32>(el: DataType) -> DataType {
+        [el[0] >> N, el[1] >> N, el[2] >> N, el[3] >> N]
     }
 
-    fn left_shift_32(el: DataType, shift: i32) -> DataType {
-        [
-            el[0] << shift,
-            el[1] << shift,
-            el[2] << shift,
-            el[3] << shift,
-        ]
+    fn left_shift_32<const N: i32>(el: DataType) -> DataType {
+        [el[0] << N, el[1] << N, el[2] << N, el[3] << N]
     }
 
     fn op_or(left: DataType, right: DataType) -> DataType {
@@ -159,6 +220,8 @@ mod scalar {
 enum InstructionSet {
     #[cfg(target_arch = "x86_64")]
     SSE3,
+    #[cfg(target_arch = "aarch64")]
+    NEON,
     Scalar,
 }
 
@@ -180,6 +243,12 @@ impl BitPacker for BitPacker4x {
                 return BitPacker4x(InstructionSet::SSE3);
             }
         }
+        #[cfg(target_arch = "aarch64")]
+        {
+            if aarch64::UnsafeBitPackerImpl::available() {
+                return BitPacker4x(InstructionSet::NEON);
+            }
+        }
         BitPacker4x(InstructionSet::Scalar)
     }
 
@@ -189,6 +258,10 @@ impl BitPacker for BitPacker4x {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => {
                     sse3::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
+                }
+                #[cfg(target_arch = "aarch64")]
+                InstructionSet::NEON => {
+                    aarch64::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
@@ -213,6 +286,13 @@ impl BitPacker for BitPacker4x {
                     compressed,
                     num_bits,
                 ),
+                #[cfg(target_arch = "aarch64")]
+                InstructionSet::NEON => aarch64::UnsafeBitPackerImpl::compress_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
                 InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::compress_sorted(
                     initial,
                     decompressed,
@@ -229,6 +309,10 @@ impl BitPacker for BitPacker4x {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => {
                     sse3::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
+                }
+                #[cfg(target_arch = "aarch64")]
+                InstructionSet::NEON => {
+                    aarch64::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
@@ -253,6 +337,13 @@ impl BitPacker for BitPacker4x {
                     decompressed,
                     num_bits,
                 ),
+                #[cfg(target_arch = "aarch64")]
+                InstructionSet::NEON => aarch64::UnsafeBitPackerImpl::decompress_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
                 InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::decompress_sorted(
                     initial,
                     compressed,
@@ -268,6 +359,8 @@ impl BitPacker for BitPacker4x {
             match self.0 {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::num_bits(decompressed),
+                #[cfg(target_arch = "aarch64")]
+                InstructionSet::NEON => aarch64::UnsafeBitPackerImpl::num_bits(decompressed),
                 InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::num_bits(decompressed),
             }
         }
@@ -279,6 +372,10 @@ impl BitPacker for BitPacker4x {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => {
                     sse3::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                }
+                #[cfg(target_arch = "aarch64")]
+                InstructionSet::NEON => {
+                    aarch64::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
