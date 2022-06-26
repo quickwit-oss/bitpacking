@@ -74,27 +74,26 @@ mod aarch64 {
     use std::arch::aarch64::uint32x4_t as DataType;
     use std::arch::aarch64::vandq_u32 as op_and;
     use std::arch::aarch64::vorrq_u32 as op_or;
-    use std::arch::aarch64::{
-        vaddq_u32, vdupq_laneq_u32, vextq_u32, vgetq_lane_u32, vld1q_u32, vmovq_n_s32, vmovq_n_u32,
-        vshlq_u32, vst1q_u32, vsubq_u32,
-    };
-    unsafe fn set1(v: i32) -> DataType {
-        vmovq_n_u32(v as u32)
-    }
-    unsafe fn load_unaligned(p: *const DataType) -> DataType {
-        let up = std::mem::transmute::<_, *const u32>(p);
-        vld1q_u32(up)
-    }
-    unsafe fn store_unaligned(p: *const DataType, v: DataType) {
-        let op = std::mem::transmute::<_, *mut u32>(p);
-        vst1q_u32(op, v)
-    }
     use std::arch::aarch64::vshlq_n_u32 as left_shift_32;
-    unsafe fn right_shift_32<const N: i32>(v: DataType) -> DataType {
-        // Ideally we'd use vshrq_n_u32() here but it does not allow zero values and AFAICT there
-        // is no way to allow it to compile so long as macros pass N=0. Instead use vshlq_u32()
-        // with a negative value (which results in shift-right).
-        vshlq_u32(v, vmovq_n_s32(-N))
+    use std::arch::aarch64::vshrq_n_u32 as right_shift_32;
+    use std::arch::aarch64::{
+        vaddq_u32, vdupq_laneq_u32, vdupq_n_u32, vextq_u32, vgetq_lane_u32, vld1q_u32, vst1q_u32,
+        vsubq_u32,
+    };
+    #[target_feature(enable = "neon")]
+    #[inline]
+    unsafe fn set1(v: i32) -> DataType {
+        vdupq_n_u32(v as u32)
+    }
+    #[target_feature(enable = "neon")]
+    #[inline]
+    unsafe fn load_unaligned(p: *const DataType) -> DataType {
+        vld1q_u32(p as *const u32)
+    }
+    #[target_feature(enable = "neon")]
+    #[inline]
+    unsafe fn store_unaligned(p: *const DataType, v: DataType) {
+        vst1q_u32(p as *mut u32, v)
     }
 
     #[target_feature(enable = "neon")]
@@ -118,12 +117,16 @@ mod aarch64 {
     #[inline]
     unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
         let base = vdupq_laneq_u32(prev, 3);
-        let zero = vmovq_n_u32(0);
+        let zero = vdupq_n_u32(0);
         let a__b__c__d_ = delta;
+        //let ___a__b__c_ = vextq_u32(zero, a__b__c__d_, 3);
+        //let a__ab_bc_cd = vaddq_u32(a__b__c__d_, ___a__b__c_);
+        //let ______a__bc = std::arch::aarch64::vpaddq_u32(zero, ___a__b__c_);
+        //let a_ab_abc_abcd = vaddq_u32(a__ab_bc_cd, ______a__bc);
         let ______a__b_ = vextq_u32(zero, a__b__c__d_, 2);
         let a__b__ca_db = vaddq_u32(______a__b_, a__b__c__d_);
         let ___a__b__ca = vextq_u32(zero, a__b__ca_db, 3);
-        let a_ab_abc_abcd: DataType = vaddq_u32(___a__b__ca, a__b__ca_db);
+        let a_ab_abc_abcd = vaddq_u32(___a__b__ca, a__b__ca_db);
         vaddq_u32(base, a_ab_abc_abcd)
     }
 
