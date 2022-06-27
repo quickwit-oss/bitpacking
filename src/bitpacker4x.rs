@@ -119,10 +119,6 @@ mod aarch64 {
         let base = vdupq_laneq_u32(prev, 3);
         let zero = vdupq_n_u32(0);
         let a__b__c__d_ = delta;
-        //let ___a__b__c_ = vextq_u32(zero, a__b__c__d_, 3);
-        //let a__ab_bc_cd = vaddq_u32(a__b__c__d_, ___a__b__c_);
-        //let ______a__bc = std::arch::aarch64::vpaddq_u32(zero, ___a__b__c_);
-        //let a_ab_abc_abcd = vaddq_u32(a__ab_bc_cd, ______a__bc);
         let ______a__b_ = vextq_u32(zero, a__b__c__d_, 2);
         let a__b__ca_db = vaddq_u32(______a__b_, a__b__c__d_);
         let ___a__b__ca = vextq_u32(zero, a__b__ca_db, 3);
