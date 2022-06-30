@@ -112,6 +112,19 @@ mod scalar {
         ]
     }
 
+    fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
+        [
+            base[0] | (to_shift[0] << N),
+            base[1] | (to_shift[1] << N),
+            base[2] | (to_shift[2] << N),
+            base[3] | (to_shift[3] << N),
+            base[4] | (to_shift[4] << N),
+            base[5] | (to_shift[5] << N),
+            base[6] | (to_shift[6] << N),
+            base[7] | (to_shift[7] << N),
+        ]
+    }
+
     fn op_or(left: DataType, right: DataType) -> DataType {
         [
             left[0] | right[0],

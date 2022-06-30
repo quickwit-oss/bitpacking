@@ -12,6 +12,7 @@ macro_rules! pack_unpack_with_bits {
                 set1,
                 right_shift_32,
                 left_shift_32,
+                left_shift_insert_32,
                 op_or,
                 op_and,
                 load_unaligned,
@@ -42,8 +43,7 @@ macro_rules! pack_unpack_with_bits {
 
                         out_register =
                             if inner_cursor > 0 {
-                                let shifted = left_shift_32::<{inner_cursor as i32}>(in_register);
-                                op_or(out_register, shifted)
+                                left_shift_insert_32::<{inner_cursor as i32}>(out_register, in_register)
                             } else {
                                 in_register
                             };
@@ -58,12 +58,11 @@ macro_rules! pack_unpack_with_bits {
                     }
                 }
                 let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr.add(31)));
-                let shifted = if 32 - NUM_BITS > 0 {
-                    left_shift_32::<{32 - NUM_BITS as i32}>(in_register)
+                out_register = if 32 - NUM_BITS > 0 {
+                    left_shift_insert_32::<{32 - NUM_BITS as i32}>(out_register, in_register)
                 } else {
-                    in_register
+                    op_or(out_register, in_register)
                 };
-                out_register = op_or(out_register, shifted);
                 store_unaligned(output_ptr, out_register);
 
                 NUM_BYTES_PER_BLOCK

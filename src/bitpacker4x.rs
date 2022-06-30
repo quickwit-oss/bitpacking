@@ -76,6 +76,7 @@ mod aarch64 {
     use std::arch::aarch64::vorrq_u32 as op_or;
     use std::arch::aarch64::vshlq_n_u32 as left_shift_32;
     use std::arch::aarch64::vshrq_n_u32 as right_shift_32;
+    use std::arch::aarch64::vsliq_n_u32 as left_shift_insert_32;
     use std::arch::aarch64::{
         vaddq_u32, vdupq_laneq_u32, vdupq_n_u32, vextq_u32, vgetq_lane_u32, vld1q_u32, vst1q_u32,
         vsubq_u32,
@@ -153,6 +154,15 @@ mod scalar {
 
     fn left_shift_32<const N: i32>(el: DataType) -> DataType {
         [el[0] << N, el[1] << N, el[2] << N, el[3] << N]
+    }
+
+    fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
+        [
+            base[0] | (to_shift[0] << N),
+            base[1] | (to_shift[1] << N),
+            base[2] | (to_shift[2] << N),
+            base[3] | (to_shift[3] << N),
+        ]
     }
 
     fn op_or(left: DataType, right: DataType) -> DataType {
