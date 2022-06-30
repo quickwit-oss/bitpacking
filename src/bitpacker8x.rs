@@ -25,6 +25,11 @@ mod avx2 {
         _mm256_slli_si256, _mm256_srli_si256, _mm256_sub_epi32,
     };
 
+    #[inline]
+    unsafe fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
+        op_or(base, left_shift_32::<N>(to_shift))
+    }
+
     #[allow(non_snake_case)]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
         let a__b__c__d__e__f__g__h_ = accumulator;

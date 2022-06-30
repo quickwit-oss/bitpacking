@@ -24,6 +24,11 @@ mod sse3 {
         _mm_sub_epi32,
     };
 
+    #[inline]
+    unsafe fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
+        op_or(base, left_shift_32::<N>(to_shift))
+    }
+
     #[allow(non_snake_case)]
     #[inline]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
