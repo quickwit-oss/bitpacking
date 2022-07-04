@@ -1,5 +1,6 @@
 extern crate rand;
 
+use self::rand::distributions::Uniform;
 use self::rand::prelude::*;
 use super::most_significant_bit;
 use super::UnsafeBitPacker;
@@ -7,9 +8,10 @@ use super::UnsafeBitPacker;
 pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
     assert!(max_num_bits <= 32u8);
     let seed: &[u8; 32] = &[1u8; 32];
-    let max_val: u64 = 1u64 << max_num_bits;
     let mut rng = StdRng::from_seed(*seed);
-    (0..n).map(|_| rng.gen_range(0, max_val) as u32).collect()
+    let max_val: u64 = 1u64 << max_num_bits;
+    let between = Uniform::from(0..max_val);
+    (0..n).map(|_| between.sample(&mut rng) as u32).collect()
 }
 
 fn integrate_data(initial: u32, data: &mut [u32]) {
