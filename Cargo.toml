@@ -12,9 +12,9 @@ edition = "2018"
 crunchy = "0.2"
 
 [dev-dependencies]
-rand = "0.7"
+rand = "0.8"
 criterion = "0.3"
-proptest = "0.9.4"
+proptest = "1.0.0"
 
 [features]
 bitpacker1x = []
