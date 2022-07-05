@@ -74,7 +74,7 @@ mod sse3 {
 }
 
 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-mod aarch64 {
+mod neon {
 
     use super::BLOCK_LEN;
     use crate::Available;
@@ -262,7 +262,7 @@ impl BitPacker for BitPacker4x {
         }
         #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
         {
-            if aarch64::UnsafeBitPackerImpl::available() {
+            if neon::UnsafeBitPackerImpl::available() {
                 return BitPacker4x(InstructionSet::NEON);
             }
         }
@@ -278,7 +278,7 @@ impl BitPacker for BitPacker4x {
                 }
                 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
                 InstructionSet::NEON => {
-                    aarch64::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
+                    neon::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::compress(decompressed, compressed, num_bits)
@@ -304,7 +304,7 @@ impl BitPacker for BitPacker4x {
                     num_bits,
                 ),
                 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-                InstructionSet::NEON => aarch64::UnsafeBitPackerImpl::compress_sorted(
+                InstructionSet::NEON => neon::UnsafeBitPackerImpl::compress_sorted(
                     initial,
                     decompressed,
                     compressed,
@@ -329,7 +329,7 @@ impl BitPacker for BitPacker4x {
                 }
                 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
                 InstructionSet::NEON => {
-                    aarch64::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
+                    neon::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
@@ -355,7 +355,7 @@ impl BitPacker for BitPacker4x {
                     num_bits,
                 ),
                 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-                InstructionSet::NEON => aarch64::UnsafeBitPackerImpl::decompress_sorted(
+                InstructionSet::NEON => neon::UnsafeBitPackerImpl::decompress_sorted(
                     initial,
                     compressed,
                     decompressed,
@@ -377,7 +377,7 @@ impl BitPacker for BitPacker4x {
                 #[cfg(target_arch = "x86_64")]
                 InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::num_bits(decompressed),
                 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-                InstructionSet::NEON => aarch64::UnsafeBitPackerImpl::num_bits(decompressed),
+                InstructionSet::NEON => neon::UnsafeBitPackerImpl::num_bits(decompressed),
                 InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::num_bits(decompressed),
             }
         }
@@ -392,7 +392,7 @@ impl BitPacker for BitPacker4x {
                 }
                 #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
                 InstructionSet::NEON => {
-                    aarch64::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                    neon::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
@@ -428,9 +428,9 @@ mod tests {
     #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
     #[test]
     fn test_compatible_neon() {
-        use super::aarch64;
-        if aarch64::UnsafeBitPackerImpl::available() {
-            test_util_compatible::<scalar::UnsafeBitPackerImpl, aarch64::UnsafeBitPackerImpl>(
+        use super::neon;
+        if neon::UnsafeBitPackerImpl::available() {
+            test_util_compatible::<scalar::UnsafeBitPackerImpl, neon::UnsafeBitPackerImpl>(
                 BLOCK_LEN,
             );
         }
