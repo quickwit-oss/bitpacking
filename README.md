@@ -131,7 +131,7 @@ Intel(R) Core(TM) i5-8250U CPU @ 1.60GHz.
 
 You can get accurate figures on your hardware by running the following command.
 
-    cargo +nightly bench --features unstable
+    cargo bench
 
 
 ## BitPacker1x
