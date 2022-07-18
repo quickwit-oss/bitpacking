@@ -86,7 +86,7 @@ mod neon {
     use std::arch::aarch64::vshrq_n_u32 as right_shift_32;
     use std::arch::aarch64::vsliq_n_u32 as left_shift_insert_32;
     use std::arch::aarch64::{
-        vaddq_u32, vdupq_laneq_u32, vdupq_n_u32, vextq_u32, vgetq_lane_u32, vld1q_u32, vst1q_u32,
+        vaddq_u32, vdupq_laneq_u32, vdupq_n_u32, vextq_u32, vld1q_u32, vmaxvq_u32, vst1q_u32,
         vsubq_u32,
     };
     #[target_feature(enable = "neon")]
@@ -109,11 +109,9 @@ mod neon {
     #[allow(non_snake_case)]
     #[inline]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
-        let a__b__c__d_ = accumulator;
-        let c__d__b__a_ = vextq_u32(a__b__c__d_, a__b__c__d_, 2);
-        let ca_db_ca_db = op_or(a__b__c__d_, c__d__b__a_);
-        let db_ca_db_ca = vextq_u32(ca_db_ca_db, ca_db_ca_db, 1);
-        vgetq_lane_u32(op_or(ca_db_ca_db, db_ca_db_ca), 0)
+        // NB: this function computes the max instead of ORing the vector components together.
+        // In terms of overall behavior this is equivalent since the next instruction will be clz.
+        vmaxvq_u32(accumulator)
     }
 
     #[target_feature(enable = "neon")]
