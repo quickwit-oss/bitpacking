@@ -1,107 +1,131 @@
 macro_rules! pack_unpack_with_bits {
-
-    ($name:ident, $n:expr, $cpufeature:meta) => {
-
-
+    ($name:ident, $n:literal, $cycle:literal, $cpufeature:meta) => {
         mod $name {
 
-            use crunchy::unroll;
             use super::BLOCK_LEN;
+            use super::{
+                left_shift_32, load_unaligned, op_and, op_or, right_shift_32, set1,
+                store_unaligned, DataType,
+            };
             use super::{Sink, Transformer};
-            use super::{DataType,
-                set1,
-                right_shift_32,
-                left_shift_32,
-                op_or,
-                op_and,
-                load_unaligned,
-                store_unaligned};
+            use unroll::unroll_for_loops;
 
             const NUM_BITS: usize = $n;
             const NUM_BYTES_PER_BLOCK: usize = NUM_BITS * BLOCK_LEN / 8;
 
+            const REPEAT: usize = 32 / $cycle;
+
             #[$cpufeature]
-            pub(crate) unsafe fn pack<TDeltaComputer: Transformer>(input_arr: &[u32], output_arr: &mut [u8], mut delta_computer: TDeltaComputer) -> usize {
-                assert_eq!(input_arr.len(), BLOCK_LEN, "Input block too small {}, (expected {})", input_arr.len(), BLOCK_LEN);
-                assert!(output_arr.len() >= NUM_BYTES_PER_BLOCK, "Output array too small (numbits {}). {} <= {}", NUM_BITS, output_arr.len(), NUM_BYTES_PER_BLOCK);
+            #[unroll_for_loops]
+            pub(crate) unsafe fn pack<TDeltaComputer: Transformer>(
+                input_arr: &[u32],
+                output_arr: &mut [u8],
+                mut delta_computer: TDeltaComputer,
+            ) -> usize {
+                assert_eq!(
+                    input_arr.len(),
+                    BLOCK_LEN,
+                    "Input block too small {}, (expected {})",
+                    input_arr.len(),
+                    BLOCK_LEN
+                );
+                assert!(
+                    output_arr.len() >= NUM_BYTES_PER_BLOCK,
+                    "Output array too small (numbits {}). {} <= {}",
+                    NUM_BITS,
+                    output_arr.len(),
+                    NUM_BYTES_PER_BLOCK
+                );
 
-                let input_ptr = input_arr.as_ptr() as *const DataType;
+                let mut input_ptr = input_arr.as_ptr() as *const DataType;
                 let mut output_ptr = output_arr.as_mut_ptr() as *mut DataType;
-                let mut out_register: DataType = delta_computer.transform(load_unaligned(input_ptr));
 
-                unroll! {
-                    for iter in 0..30 {
-                        const i: usize = 1 + iter;
+                for _ in 0..REPEAT {
+                    let mut out_register: DataType =
+                        delta_computer.transform(load_unaligned(input_ptr));
+                    input_ptr = input_ptr.add(1);
 
-                        const bits_filled: usize = i * NUM_BITS;
-                        const inner_cursor: usize = bits_filled % 32;
-                        const remaining: usize = 32 - inner_cursor;
+                    // Ideally we would have liked to write `for input_id in 1..$cycle-1`
+                    // here, unfortunately unroll_for_loops needs a literal here to kick
+                    // in.
+                    for iter in 2..$cycle {
+                        const BITS_FILLED: usize = (iter - 1) * NUM_BITS;
+                        const INNER_CURSOR: usize = BITS_FILLED % 32;
+                        const REMAINING: usize = 32 - INNER_CURSOR;
 
-                        let offset_ptr = input_ptr.add(i);
-                        let in_register: DataType = delta_computer.transform(load_unaligned(offset_ptr));
+                        let in_register: DataType =
+                            delta_computer.transform(load_unaligned(input_ptr));
+                        input_ptr = input_ptr.add(1);
 
-                        out_register =
-                            if inner_cursor > 0 {
-                                let shifted = left_shift_32(in_register, inner_cursor as i32);
-                                op_or(out_register, shifted)
-                            } else {
-                                in_register
-                            };
+                        out_register = if INNER_CURSOR > 0 {
+                            let shifted = left_shift_32(in_register, INNER_CURSOR as i32);
+                            op_or(out_register, shifted)
+                        } else {
+                            in_register
+                        };
 
-                        if remaining <= NUM_BITS {
+                        if REMAINING <= NUM_BITS {
                             store_unaligned(output_ptr, out_register);
                             output_ptr = output_ptr.offset(1);
-                            if remaining < NUM_BITS {
-                                out_register = right_shift_32(in_register, remaining as i32);
+                            if REMAINING < NUM_BITS {
+                                out_register = right_shift_32(in_register, REMAINING as i32);
                             }
                         }
                     }
+
+                    let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr));
+                    input_ptr = input_ptr.add(1);
+                    let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
+                    out_register = op_or(out_register, shifted);
+                    store_unaligned(output_ptr, out_register);
+                    output_ptr = output_ptr.add(1);
                 }
-                let in_register: DataType = delta_computer.transform(load_unaligned(input_ptr.add(31)));
-                let shifted = left_shift_32(in_register, 32 - NUM_BITS as i32);
-                out_register = op_or(out_register, shifted);
-                store_unaligned(output_ptr, out_register);
 
                 NUM_BYTES_PER_BLOCK
             }
 
             #[$cpufeature]
-            pub(crate) unsafe fn unpack<Output: Sink>(compressed: &[u8], mut output: Output) -> usize {
-
-                assert!(compressed.len() >= NUM_BYTES_PER_BLOCK, "Compressed array seems too small. ({} < {}) ", compressed.len(), NUM_BYTES_PER_BLOCK);
+            #[unroll_for_loops]
+            pub(crate) unsafe fn unpack<Output: Sink>(
+                compressed: &[u8],
+                mut output: Output,
+            ) -> usize {
+                assert!(
+                    compressed.len() >= NUM_BYTES_PER_BLOCK,
+                    "Compressed array seems too small. ({} < {}) ",
+                    compressed.len(),
+                    NUM_BYTES_PER_BLOCK
+                );
 
                 let mut input_ptr = compressed.as_ptr() as *const DataType;
 
-                let mask_scalar: u32 = ((1u64 << NUM_BITS) - 1u64) as u32;
-                let mask = set1(mask_scalar as i32);
+                const MASK_SCALAR: u32 = ((1u64 << NUM_BITS) - 1u64) as u32;
+                let mask: DataType = set1(MASK_SCALAR as i32);
 
-                let mut in_register: DataType = load_unaligned(input_ptr);
+                for _ in 0..REPEAT {
+                    let mut in_register: DataType = load_unaligned(input_ptr);
+                    let out_register = op_and(in_register, mask);
+                    output.process(out_register);
 
-                let out_register = op_and(in_register, mask);
-                output.process(out_register);
-
-                unroll! {
-                    for iter in 0..31 {
-                        const i: usize = iter + 1;
-
-                        const inner_cursor: usize = (i * NUM_BITS) % 32;
-                        const inner_capacity: usize = 32 - inner_cursor;
+                    for i in 1..$cycle {
+                        const INNER_CURSOR: usize = (i * NUM_BITS) % 32;
+                        const INNER_CAPACITY: usize = 32 - INNER_CURSOR;
 
                         // LLVM will not emit the shift operand if
-                        // `inner_cursor` is 0.
-                        let shifted_in_register = right_shift_32(in_register, inner_cursor as i32);
+                        // `INNER_CURSOR` is 0.
+                        let shifted_in_register = right_shift_32(in_register, INNER_CURSOR as i32);
                         let mut out_register: DataType = op_and(shifted_in_register, mask);
 
                         // We consumed our current quadruplets entirely.
                         // We therefore read another one.
-                        if inner_capacity <= NUM_BITS && i != 31 {
+                        if INNER_CAPACITY <= NUM_BITS && i != $cycle - 1 {
                             input_ptr = input_ptr.add(1);
                             in_register = load_unaligned(input_ptr);
 
                             // This quadruplets is actually cutting one of
                             // our `DataType`. We need to read the next one.
-                            if inner_capacity < NUM_BITS {
-                                let shifted = left_shift_32(in_register, inner_capacity as i32);
+                            if INNER_CAPACITY < NUM_BITS {
+                                let shifted = left_shift_32(in_register, INNER_CAPACITY as i32);
                                 let masked = op_and(shifted, mask);
                                 out_register = op_or(out_register, masked);
                             }
@@ -109,27 +133,28 @@ macro_rules! pack_unpack_with_bits {
 
                         output.process(out_register);
                     }
+                    input_ptr = input_ptr.add(1);
                 }
-
-
                 NUM_BYTES_PER_BLOCK
             }
         }
-    }
+    };
 }
 
 macro_rules! pack_unpack_with_bits_32 {
     ($cpufeature:meta) => {
         mod pack_unpack_with_bits_32 {
+
             use super::BLOCK_LEN;
             use super::{load_unaligned, store_unaligned, DataType};
             use super::{Sink, Transformer};
-            use crunchy::unroll;
+            use unroll::unroll_for_loops;
 
             const NUM_BITS: usize = 32;
             const NUM_BYTES_PER_BLOCK: usize = NUM_BITS * BLOCK_LEN / 8;
 
             #[$cpufeature]
+            #[unroll_for_loops]
             pub(crate) unsafe fn pack<TDeltaComputer: Transformer>(
                 input_arr: &[u32],
                 output_arr: &mut [u8],
@@ -152,14 +177,12 @@ macro_rules! pack_unpack_with_bits_32 {
 
                 let input_ptr: *const DataType = input_arr.as_ptr() as *const DataType;
                 let output_ptr = output_arr.as_mut_ptr() as *mut DataType;
-                unroll! {
-                    for i in 0..32 {
-                        let input_offset_ptr = input_ptr.offset(i as isize);
-                        let output_offset_ptr = output_ptr.offset(i as isize);
-                        let input_register = load_unaligned(input_offset_ptr);
-                        let output_register = delta_computer.transform(input_register);
-                        store_unaligned(output_offset_ptr, output_register);
-                    }
+                for i in 0..32 {
+                    let input_offset_ptr = input_ptr.offset(i as isize);
+                    let output_offset_ptr = output_ptr.offset(i as isize);
+                    let input_register = load_unaligned(input_offset_ptr);
+                    let output_register = delta_computer.transform(input_register);
+                    store_unaligned(output_offset_ptr, output_register);
                 }
                 NUM_BYTES_PER_BLOCK
             }
@@ -191,39 +214,39 @@ macro_rules! declare_bitpacker {
     ($cpufeature:meta) => {
         use super::super::UnsafeBitPacker;
         use crate::most_significant_bit;
-        use crunchy::unroll;
+        use unroll::unroll_for_loops;
 
-        pack_unpack_with_bits!(pack_unpack_with_bits_1, 1, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_2, 2, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_3, 3, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_4, 4, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_5, 5, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_6, 6, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_7, 7, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_8, 8, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_9, 9, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_10, 10, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_11, 11, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_12, 12, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_13, 13, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_14, 14, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_15, 15, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_16, 16, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_17, 17, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_18, 18, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_19, 19, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_20, 20, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_21, 21, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_22, 22, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_23, 23, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_24, 24, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_25, 25, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_26, 26, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_27, 27, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_28, 28, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_29, 29, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_30, 30, $cpufeature);
-        pack_unpack_with_bits!(pack_unpack_with_bits_31, 31, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_1, 1, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_2, 2, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_3, 3, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_4, 4, 8, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_5, 5, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_6, 6, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_7, 7, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_8, 8, 4, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_9, 9, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_10, 10, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_11, 11, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_12, 12, 8, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_13, 13, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_14, 14, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_15, 15, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_16, 16, 2, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_17, 17, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_18, 18, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_19, 19, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_20, 20, 8, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_21, 21, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_22, 22, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_23, 23, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_24, 24, 4, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_25, 25, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_26, 26, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_27, 27, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_28, 28, 8, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_29, 29, 32, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_30, 30, 16, $cpufeature);
+        pack_unpack_with_bits!(pack_unpack_with_bits_31, 31, 32, $cpufeature);
         pack_unpack_with_bits_32!($cpufeature);
 
         unsafe fn compress_generic<DeltaComputer: Transformer>(
@@ -454,6 +477,7 @@ macro_rules! declare_bitpacker {
             }
 
             #[$cpufeature]
+            #[unroll_for_loops]
             unsafe fn num_bits(decompressed: &[u32]) -> u8 {
                 assert_eq!(
                     decompressed.len(),
@@ -463,17 +487,16 @@ macro_rules! declare_bitpacker {
                 );
                 let data: *const DataType = decompressed.as_ptr() as *const DataType;
                 let mut accumulator = load_unaligned(data);
-                unroll! {
-                    for iter in 0..31 {
-                        let i = iter + 1;
-                        let newvec = load_unaligned(data.add(i));
-                        accumulator = op_or(accumulator, newvec);
-                    }
+                for iter in 0..31 {
+                    let i = iter + 1;
+                    let newvec = load_unaligned(data.add(i));
+                    accumulator = op_or(accumulator, newvec);
                 }
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
 
             #[$cpufeature]
+            #[unroll_for_loops]
             unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
                 assert_eq!(
                     decompressed.len(),
@@ -488,14 +511,12 @@ macro_rules! declare_bitpacker {
                 let mut accumulator = compute_delta(load_unaligned(data), initial_vec);
                 let mut previous = first;
 
-                unroll! {
-                    for iter in 0..30 {
-                        let i = iter + 1;
-                        let current = load_unaligned(data.add(i));
-                        let delta = compute_delta(current, previous);
-                        accumulator =  op_or(accumulator, delta);
-                        previous = current;
-                    }
+                for iter in 0..30 {
+                    let i = iter + 1;
+                    let current = load_unaligned(data.add(i));
+                    let delta = compute_delta(current, previous);
+                    accumulator = op_or(accumulator, delta);
+                    previous = current;
                 }
                 let current = load_unaligned(data.add(31));
                 let delta = compute_delta(current, previous);
