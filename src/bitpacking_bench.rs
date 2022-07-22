@@ -151,7 +151,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
     bitpacker: TBitPacker,
     criterion: &mut Criterion,
 ) {
-    for &num_bit in [1u8, 15u8, 31u8].iter() {
+    for &num_bit in [1u8, 2u8, 24u8, 31u8].iter() {
         let num_bits = [num_bit; NUM_BLOCKS];
         criterion.bench(
             name,
