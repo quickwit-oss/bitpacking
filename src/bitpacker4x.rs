@@ -73,7 +73,7 @@ mod scalar {
 
     type DataType = [u32; 4];
 
-    fn set1(el: i32) -> DataType {
+    const fn set1(el: i32) -> DataType {
         [el as u32; 4]
     }
 
