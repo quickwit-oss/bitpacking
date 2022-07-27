@@ -23,10 +23,6 @@ mod scalar {
         el << N
     }
 
-    fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
-        base | (to_shift << N)
-    }
-
     fn op_or(left: DataType, right: DataType) -> DataType {
         left | right
     }

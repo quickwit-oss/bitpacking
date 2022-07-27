@@ -27,11 +27,6 @@ mod sse3 {
         _mm_sub_epi32,
     };
 
-    #[inline]
-    unsafe fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
-        op_or(base, left_shift_32::<N>(to_shift))
-    }
-
     #[allow(non_snake_case)]
     #[inline]
     unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
@@ -79,58 +74,40 @@ mod neon {
     use super::BLOCK_LEN;
     use crate::Available;
 
-    use std::arch::aarch64::uint32x4_t as DataType;
-    use std::arch::aarch64::vandq_u32 as op_and;
-    use std::arch::aarch64::vorrq_u32 as op_or;
-    use std::arch::aarch64::vshlq_n_u32 as left_shift_32;
-    use std::arch::aarch64::vshrq_n_u32 as right_shift_32;
-    use std::arch::aarch64::vsliq_n_u32 as left_shift_insert_32;
-    use std::arch::aarch64::{
-        vaddq_u32, vdupq_laneq_u32, vdupq_n_u32, vextq_u32, vld1q_u32, vmaxvq_u32, vst1q_u32,
-        vsubq_u32,
-    };
-    #[target_feature(enable = "neon")]
-    #[inline]
-    unsafe fn set1(v: i32) -> DataType {
-        vdupq_n_u32(v as u32)
-    }
-    #[target_feature(enable = "neon")]
-    #[inline]
-    unsafe fn load_unaligned(p: *const DataType) -> DataType {
-        vld1q_u32(p as *const u32)
-    }
-    #[target_feature(enable = "neon")]
-    #[inline]
-    unsafe fn store_unaligned(p: *const DataType, v: DataType) {
-        vst1q_u32(p as *mut u32, v)
-    }
-
-    #[target_feature(enable = "neon")]
-    #[allow(non_snake_case)]
-    #[inline]
-    unsafe fn or_collapse_to_u32(accumulator: DataType) -> u32 {
-        // NB: this function computes the max instead of ORing the vector components together.
-        // In terms of overall behavior this is equivalent since the next instruction will be clz.
-        vmaxvq_u32(accumulator)
-    }
+    use super::scalar::left_shift_32;
+    use super::scalar::load_unaligned;
+    use super::scalar::op_and;
+    use super::scalar::op_or;
+    use super::scalar::or_collapse_to_u32;
+    use super::scalar::right_shift_32;
+    use super::scalar::set1;
+    use super::scalar::store_unaligned;
+    use super::scalar::DataType;
+    use std::arch::aarch64::{vaddq_u32, vdupq_n_u32, vextq_u32, vld1q_u32, vst1q_u32, vsubq_u32};
 
     #[target_feature(enable = "neon")]
     unsafe fn compute_delta(curr: DataType, prev: DataType) -> DataType {
-        vsubq_u32(curr, vextq_u32(prev, curr, 3))
+        let c = vld1q_u32(curr.as_ptr());
+        let p = vld1q_u32(prev.as_ptr());
+        let mut r = set1(0);
+        vst1q_u32(r.as_mut_ptr(), vsubq_u32(c, vextq_u32(p, c, 3)));
+        r
     }
 
     #[target_feature(enable = "neon")]
     #[allow(non_snake_case)]
     #[inline]
     unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
-        let base = vdupq_laneq_u32(prev, 3);
+        let base = vdupq_n_u32(prev[3]);
         let zero = vdupq_n_u32(0);
-        let a__b__c__d_ = delta;
+        let a__b__c__d_ = vld1q_u32(delta.as_ptr());
         let ______a__b_ = vextq_u32(zero, a__b__c__d_, 2);
         let a__b__ca_db = vaddq_u32(______a__b_, a__b__c__d_);
         let ___a__b__ca = vextq_u32(zero, a__b__ca_db, 3);
         let a_ab_abc_abcd = vaddq_u32(___a__b__ca, a__b__ca_db);
-        vaddq_u32(base, a_ab_abc_abcd)
+        let mut r = set1(0);
+        vst1q_u32(r.as_mut_ptr(), vaddq_u32(base, a_ab_abc_abcd));
+        r
     }
 
     declare_bitpacker!(target_feature(enable = "neon"));
@@ -148,30 +125,21 @@ mod scalar {
     use crate::Available;
     use std::ptr;
 
-    type DataType = [u32; 4];
+    pub(crate) type DataType = [u32; 4];
 
-    fn set1(el: i32) -> DataType {
+    pub(crate) fn set1(el: i32) -> DataType {
         [el as u32; 4]
     }
 
-    fn right_shift_32<const N: i32>(el: DataType) -> DataType {
+    pub(crate) fn right_shift_32<const N: i32>(el: DataType) -> DataType {
         [el[0] >> N, el[1] >> N, el[2] >> N, el[3] >> N]
     }
 
-    fn left_shift_32<const N: i32>(el: DataType) -> DataType {
+    pub(crate) fn left_shift_32<const N: i32>(el: DataType) -> DataType {
         [el[0] << N, el[1] << N, el[2] << N, el[3] << N]
     }
 
-    fn left_shift_insert_32<const N: i32>(base: DataType, to_shift: DataType) -> DataType {
-        [
-            base[0] | (to_shift[0] << N),
-            base[1] | (to_shift[1] << N),
-            base[2] | (to_shift[2] << N),
-            base[3] | (to_shift[3] << N),
-        ]
-    }
-
-    fn op_or(left: DataType, right: DataType) -> DataType {
+    pub(crate) fn op_or(left: DataType, right: DataType) -> DataType {
         [
             left[0] | right[0],
             left[1] | right[1],
@@ -180,7 +148,7 @@ mod scalar {
         ]
     }
 
-    fn op_and(left: DataType, right: DataType) -> DataType {
+    pub(crate) fn op_and(left: DataType, right: DataType) -> DataType {
         [
             left[0] & right[0],
             left[1] & right[1],
@@ -189,15 +157,15 @@ mod scalar {
         ]
     }
 
-    unsafe fn load_unaligned(addr: *const DataType) -> DataType {
+    pub(crate) unsafe fn load_unaligned(addr: *const DataType) -> DataType {
         ptr::read_unaligned(addr)
     }
 
-    unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
+    pub(crate) unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
         ptr::write_unaligned(addr, data);
     }
 
-    fn or_collapse_to_u32(accumulator: DataType) -> u32 {
+    pub(crate) fn or_collapse_to_u32(accumulator: DataType) -> u32 {
         (accumulator[0] | accumulator[1]) | (accumulator[2] | accumulator[3])
     }
 
