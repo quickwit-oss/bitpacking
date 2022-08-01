@@ -15,12 +15,12 @@ mod scalar {
         el as u32
     }
 
-    fn right_shift_32(el: DataType, shift: i32) -> DataType {
-        el >> shift
+    fn right_shift_32<const N: i32>(el: DataType) -> DataType {
+        el >> N
     }
 
-    fn left_shift_32(el: DataType, shift: i32) -> DataType {
-        el << shift
+    fn left_shift_32<const N: i32>(el: DataType) -> DataType {
+        el << N
     }
 
     fn op_or(left: DataType, right: DataType) -> DataType {

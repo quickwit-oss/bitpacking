@@ -123,8 +123,8 @@ fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(
                     "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}",
                     i,
                     expected_num_bits,
-                    &original[..i + 5],
-                    &result[..i + 5]
+                    &original[..std::cmp::min(i + 5, original.len())],
+                    &result[..std::cmp::min(i + 5, result.len())]
                 );
             }
         }

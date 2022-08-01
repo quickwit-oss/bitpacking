@@ -86,29 +86,29 @@ mod scalar {
         [el as u32; 8]
     }
 
-    fn right_shift_32(el: DataType, shift: i32) -> DataType {
+    fn right_shift_32<const N: i32>(el: DataType) -> DataType {
         [
-            el[0] >> shift,
-            el[1] >> shift,
-            el[2] >> shift,
-            el[3] >> shift,
-            el[4] >> shift,
-            el[5] >> shift,
-            el[6] >> shift,
-            el[7] >> shift,
+            el[0] >> N,
+            el[1] >> N,
+            el[2] >> N,
+            el[3] >> N,
+            el[4] >> N,
+            el[5] >> N,
+            el[6] >> N,
+            el[7] >> N,
         ]
     }
 
-    fn left_shift_32(el: DataType, shift: i32) -> DataType {
+    fn left_shift_32<const N: i32>(el: DataType) -> DataType {
         [
-            el[0] << shift,
-            el[1] << shift,
-            el[2] << shift,
-            el[3] << shift,
-            el[4] << shift,
-            el[5] << shift,
-            el[6] << shift,
-            el[7] << shift,
+            el[0] << N,
+            el[1] << N,
+            el[2] << N,
+            el[3] << N,
+            el[4] << N,
+            el[5] << N,
+            el[6] << N,
+            el[7] << N,
         ]
     }
 
