@@ -106,9 +106,9 @@ fn bench_decompress_delta_util<TBitPacker: BitPacker + 'static>(
         let start = i * TBitPacker::BLOCK_LEN;
         let stop = start + TBitPacker::BLOCK_LEN;
         let block = &original_values[start..stop];
-        let num_bits = bitpacker.num_bits(block);
+        let num_bits = bitpacker.num_bits_sorted(0, block);
         num_bits_vec.push(num_bits);
-        bitpacker.compress(block, &mut compressed[offset..], num_bits);
+        bitpacker.compress_sorted(0, block, &mut compressed[offset..], num_bits);
         offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
     }
     let mut result: Vec<u32> = vec![0u32; original_values.len()];
@@ -116,7 +116,7 @@ fn bench_decompress_delta_util<TBitPacker: BitPacker + 'static>(
         let mut offset = 0;
         for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
-            bitpacker.decompress(&compressed[offset..], dest_block, num_bits);
+            bitpacker.decompress_sorted(0, &compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
         }
     });
