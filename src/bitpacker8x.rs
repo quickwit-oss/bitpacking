@@ -65,6 +65,14 @@ mod avx2 {
         _mm256_add_epi32(high_offset, offseted_halved_prefix_sum)
     }
 
+    unsafe fn add(left: DataType, right: DataType) -> DataType {
+        _mm256_add_epi32(left, right)
+    }
+
+    unsafe fn sub(left: DataType, right: DataType) -> DataType {
+        _mm256_sub_epi32(left, right)
+    }
+
     declare_bitpacker!(target_feature(enable = "avx2"));
 
     impl Available for UnsafeBitPackerImpl {
@@ -176,6 +184,32 @@ mod scalar {
         [el0, el1, el2, el3, el4, el5, el6, el7]
     }
 
+    fn add(left: DataType, right: DataType) -> DataType {
+        [
+            left[0].wrapping_add(right[0]),
+            left[1].wrapping_add(right[1]),
+            left[2].wrapping_add(right[2]),
+            left[3].wrapping_add(right[3]),
+            left[4].wrapping_add(right[4]),
+            left[5].wrapping_add(right[5]),
+            left[6].wrapping_add(right[6]),
+            left[7].wrapping_add(right[7]),
+        ]
+    }
+
+    fn sub(left: DataType, right: DataType) -> DataType {
+        [
+            left[0].wrapping_sub(right[0]),
+            left[1].wrapping_sub(right[1]),
+            left[2].wrapping_sub(right[2]),
+            left[3].wrapping_sub(right[3]),
+            left[4].wrapping_sub(right[4]),
+            left[5].wrapping_sub(right[5]),
+            left[6].wrapping_sub(right[6]),
+            left[7].wrapping_sub(right[7]),
+        ]
+    }
+
     // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.
     //
     // For other bitpacker, we enable specific CPU instruction set, but for the
@@ -255,6 +289,32 @@ impl BitPacker for BitPacker8x {
         }
     }
 
+    fn compress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize {
+        unsafe {
+            match self.0 {
+                #[cfg(target_arch = "x86_64")]
+                InstructionSet::AVX2 => avx2::UnsafeBitPackerImpl::compress_strictly_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::compress_strictly_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
+            }
+        }
+    }
+
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
             match self.0 {
@@ -295,6 +355,32 @@ impl BitPacker for BitPacker8x {
         }
     }
 
+    fn decompress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize {
+        unsafe {
+            match self.0 {
+                #[cfg(target_arch = "x86_64")]
+                InstructionSet::AVX2 => avx2::UnsafeBitPackerImpl::decompress_strictly_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::decompress_strictly_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
+            }
+        }
+    }
+
     fn num_bits(&self, decompressed: &[u32]) -> u8 {
         unsafe {
             match self.0 {
@@ -314,6 +400,20 @@ impl BitPacker for BitPacker8x {
                 }
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed)
+                }
+            }
+        }
+    }
+
+    fn num_bits_strictly_sorted(&self, initial: Option<u32>, decompressed: &[u32]) -> u8 {
+        unsafe {
+            match self.0 {
+                #[cfg(target_arch = "x86_64")]
+                InstructionSet::AVX2 => {
+                    avx2::UnsafeBitPackerImpl::num_bits_strictly_sorted(initial, decompressed)
+                }
+                InstructionSet::Scalar => {
+                    scalar::UnsafeBitPackerImpl::num_bits_strictly_sorted(initial, decompressed)
                 }
             }
         }

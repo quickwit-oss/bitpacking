@@ -191,6 +191,19 @@ macro_rules! declare_bitpacker_simple {
             }
         }
 
+        struct StrictDeltaComputer {
+            pub previous: DataType,
+        }
+
+        impl Transformer for StrictDeltaComputer {
+            #[inline]
+            unsafe fn transform(&mut self, current: DataType) -> DataType {
+                let result = compute_delta(current, self.previous);
+                self.previous = current;
+                sub(result, set1(1))
+            }
+        }
+
         pub trait Sink {
             unsafe fn process(&mut self, data_type: DataType);
         }
@@ -223,6 +236,29 @@ macro_rules! declare_bitpacker_simple {
             #[inline]
             unsafe fn process(&mut self, delta: DataType) {
                 self.current = integrate_delta(self.current, delta);
+                store_unaligned(self.output_ptr, self.current);
+                self.output_ptr = self.output_ptr.add(1);
+            }
+        }
+
+        struct StrictDeltaIntegrate {
+            current: DataType,
+            output_ptr: *mut DataType,
+        }
+
+        impl StrictDeltaIntegrate {
+            unsafe fn new(initial: u32, output_ptr: *mut DataType) -> StrictDeltaIntegrate {
+                StrictDeltaIntegrate {
+                    current: set1(initial as i32),
+                    output_ptr,
+                }
+            }
+        }
+
+        impl Sink for StrictDeltaIntegrate {
+            #[inline]
+            unsafe fn process(&mut self, delta: DataType) {
+                self.current = integrate_delta(self.current, add(delta, set1(1)));
                 store_unaligned(self.output_ptr, self.current);
                 self.output_ptr = self.output_ptr.add(1);
             }
@@ -261,6 +297,25 @@ macro_rules! declare_bitpacker_simple {
                     return 0;
                 }
                 let delta_computer = DeltaComputer {
+                    previous: set1(initial as i32),
+                };
+                if num_bits == 32u8 {
+                    return pack_32(decompressed, compressed, delta_computer);
+                }
+                pack(decompressed, compressed, num_bits as usize, delta_computer)
+            }
+
+            unsafe fn compress_strictly_sorted(
+                initial: Option<u32>,
+                decompressed: &[u32],
+                compressed: &mut [u8],
+                num_bits: u8,
+            ) -> usize {
+                let initial = initial.unwrap_or(u32::MAX);
+                if num_bits == 0u8 {
+                    return 0;
+                }
+                let delta_computer = StrictDeltaComputer {
                     previous: set1(initial as i32),
                 };
                 if num_bits == 32u8 {
@@ -322,6 +377,34 @@ macro_rules! declare_bitpacker_simple {
                 unpack(compressed, output, num_bits as usize)
             }
 
+            unsafe fn decompress_strictly_sorted(
+                initial: Option<u32>,
+                compressed: &[u8],
+                decompressed: &mut [u32],
+                num_bits: u8,
+            ) -> usize {
+                assert!(
+                    decompressed.len() >= BLOCK_LEN,
+                    "The output array is not large enough : ({} >= {})",
+                    decompressed.len(),
+                    BLOCK_LEN
+                );
+                let initial = initial.unwrap_or(u32::MAX);
+                let output_ptr = decompressed.as_mut_ptr() as *mut DataType;
+                let mut output = StrictDeltaIntegrate::new(initial, output_ptr);
+                if num_bits == 0u8 {
+                    let zero = set1(0i32);
+                    for _ in 0..32 {
+                        output.process(zero);
+                    }
+                    return 0;
+                }
+                if num_bits == 32u8 {
+                    return unpack_32(compressed, output);
+                }
+                unpack(compressed, output, num_bits as usize)
+            }
+
             unsafe fn num_bits(decompressed: &[u32]) -> u8 {
                 assert_eq!(
                     decompressed.len(),
@@ -357,12 +440,34 @@ macro_rules! declare_bitpacker_simple {
                 accumulator = op_or(accumulator, delta);
                 most_significant_bit(or_collapse_to_u32(accumulator))
             }
+
+            unsafe fn num_bits_strictly_sorted(initial: Option<u32>, decompressed: &[u32]) -> u8 {
+                let initial = initial.unwrap_or(u32::MAX);
+                let initial_vec = set1(initial as i32);
+                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+                let first = load_unaligned(data);
+                let one = set1(1);
+                let mut accumulator = sub(compute_delta(load_unaligned(data), initial_vec), one);
+                let mut previous = first;
+
+                for i in 1..31 {
+                    let current = load_unaligned(data.add(i));
+                    let delta = sub(compute_delta(current, previous), one);
+                    accumulator = op_or(accumulator, delta);
+                    previous = current;
+                }
+
+                let current = load_unaligned(data.add(31));
+                let delta = sub(compute_delta(current, previous), one);
+                accumulator = op_or(accumulator, delta);
+                most_significant_bit(or_collapse_to_u32(accumulator))
+            }
         }
 
         #[cfg(test)]
         mod tests {
             use super::UnsafeBitPackerImpl;
-            use crate::tests::test_suite_compress_decompress;
+            use crate::tests::{test_suite_compress_decompress, DeltaKind};
             use crate::UnsafeBitPacker;
 
             #[test]
@@ -383,12 +488,17 @@ macro_rules! declare_bitpacker_simple {
 
             #[test]
             fn test_bitpacker_nodelta() {
-                test_suite_compress_decompress::<UnsafeBitPackerImpl>(false);
+                test_suite_compress_decompress::<UnsafeBitPackerImpl>(DeltaKind::NoDelta);
             }
 
             #[test]
             fn test_bitpacker_delta() {
-                test_suite_compress_decompress::<UnsafeBitPackerImpl>(true);
+                test_suite_compress_decompress::<UnsafeBitPackerImpl>(DeltaKind::Delta);
+            }
+
+            #[test]
+            fn test_bitpacker_strict_delta() {
+                test_suite_compress_decompress::<UnsafeBitPackerImpl>(DeltaKind::StrictDelta);
             }
         }
     };

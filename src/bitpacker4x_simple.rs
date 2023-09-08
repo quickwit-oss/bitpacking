@@ -77,6 +77,24 @@ mod scalar {
         [el0, el1, el2, el3]
     }
 
+    fn add(left: DataType, right: DataType) -> DataType {
+        [
+            left[0].wrapping_add(right[0]),
+            left[1].wrapping_add(right[1]),
+            left[2].wrapping_add(right[2]),
+            left[3].wrapping_add(right[3]),
+        ]
+    }
+
+    fn sub(left: DataType, right: DataType) -> DataType {
+        [
+            left[0].wrapping_sub(right[0]),
+            left[1].wrapping_sub(right[1]),
+            left[2].wrapping_sub(right[2]),
+            left[3].wrapping_sub(right[3]),
+        ]
+    }
+
     declare_bitpacker_simple!(cfg(any(debug, not(debug))));
 }
 
@@ -116,6 +134,23 @@ impl BitPacker for BitPacker4x {
         }
     }
 
+    fn compress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize {
+        unsafe {
+            scalar::UnsafeBitPackerImpl::compress_strictly_sorted(
+                initial,
+                decompressed,
+                compressed,
+                num_bits,
+            )
+        }
+    }
+
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe { scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits) }
     }
@@ -137,11 +172,32 @@ impl BitPacker for BitPacker4x {
         }
     }
 
+    fn decompress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize {
+        unsafe {
+            scalar::UnsafeBitPackerImpl::decompress_strictly_sorted(
+                initial,
+                compressed,
+                decompressed,
+                num_bits,
+            )
+        }
+    }
+
     fn num_bits(&self, decompressed: &[u32]) -> u8 {
         unsafe { scalar::UnsafeBitPackerImpl::num_bits(decompressed) }
     }
 
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8 {
         unsafe { scalar::UnsafeBitPackerImpl::num_bits_sorted(initial, decompressed) }
+    }
+
+    fn num_bits_strictly_sorted(&self, initial: Option<u32>, decompressed: &[u32]) -> u8 {
+        unsafe { scalar::UnsafeBitPackerImpl::num_bits_strictly_sorted(initial, decompressed) }
     }
 }
