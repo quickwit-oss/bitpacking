@@ -19,6 +19,7 @@ mod sse3 {
     use std::arch::x86_64::_mm_lddqu_si128 as load_unaligned;
     use std::arch::x86_64::_mm_or_si128 as op_or;
     use std::arch::x86_64::_mm_set1_epi32 as set1;
+    use std::arch::x86_64::_mm_set_epi32 as set;
     use std::arch::x86_64::_mm_slli_epi32 as left_shift_32;
     use std::arch::x86_64::_mm_srli_epi32 as right_shift_32;
     use std::arch::x86_64::_mm_storeu_si128 as store_unaligned;
@@ -65,8 +66,16 @@ mod sse3 {
         _mm_add_epi32(left, right)
     }
 
+    #[target_feature(enable = "sse3")]
+    #[inline]
     unsafe fn sub(left: DataType, right: DataType) -> DataType {
         _mm_sub_epi32(left, right)
+    }
+
+    #[target_feature(enable = "sse3")]
+    #[inline]
+    unsafe fn staircase() -> DataType {
+        set(4, 3, 2, 1)
     }
 
     declare_bitpacker!(target_feature(enable = "sse3"));
@@ -92,6 +101,7 @@ mod neon {
     use super::scalar::or_collapse_to_u32;
     use super::scalar::right_shift_32;
     use super::scalar::set1;
+    use super::scalar::staircase;
     use super::scalar::store_unaligned;
     use super::scalar::sub;
     use super::scalar::DataType;
@@ -218,6 +228,10 @@ mod scalar {
             left[2].wrapping_sub(right[2]),
             left[3].wrapping_sub(right[3]),
         ]
+    }
+
+    pub(crate) fn staircase() -> DataType {
+        [1, 2, 3, 4]
     }
 
     // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.

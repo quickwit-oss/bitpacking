@@ -16,6 +16,7 @@ mod avx2 {
     use std::arch::x86_64::_mm256_lddqu_si256 as load_unaligned;
     use std::arch::x86_64::_mm256_or_si256 as op_or;
     use std::arch::x86_64::_mm256_set1_epi32 as set1;
+    use std::arch::x86_64::_mm256_set_epi32 as set;
     use std::arch::x86_64::_mm256_slli_epi32 as left_shift_32;
     use std::arch::x86_64::_mm256_srli_epi32 as right_shift_32;
     use std::arch::x86_64::_mm256_storeu_si256 as store_unaligned;
@@ -71,6 +72,10 @@ mod avx2 {
 
     unsafe fn sub(left: DataType, right: DataType) -> DataType {
         _mm256_sub_epi32(left, right)
+    }
+
+    unsafe fn staircase() -> DataType {
+        set(8, 7, 6, 5, 4, 3, 2, 1)
     }
 
     declare_bitpacker!(target_feature(enable = "avx2"));
@@ -208,6 +213,10 @@ mod scalar {
             left[6].wrapping_sub(right[6]),
             left[7].wrapping_sub(right[7]),
         ]
+    }
+
+    fn staircase() -> DataType {
+        [1, 2, 3, 4, 5, 6, 7, 8]
     }
 
     // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.

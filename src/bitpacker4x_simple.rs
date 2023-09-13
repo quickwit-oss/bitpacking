@@ -95,6 +95,10 @@ mod scalar {
         ]
     }
 
+    fn staircase() -> DataType {
+        [1, 2, 3, 4]
+    }
+
     declare_bitpacker_simple!(cfg(any(debug, not(debug))));
 }
 

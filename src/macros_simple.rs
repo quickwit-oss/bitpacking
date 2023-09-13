@@ -258,7 +258,8 @@ macro_rules! declare_bitpacker_simple {
         impl Sink for StrictDeltaIntegrate {
             #[inline]
             unsafe fn process(&mut self, delta: DataType) {
-                self.current = integrate_delta(self.current, add(delta, set1(1)));
+                // self.current = integrate_delta(self.current, add(delta, set1(1)));
+                self.current = add(integrate_delta(self.current, delta), staircase());
                 store_unaligned(self.output_ptr, self.current);
                 self.output_ptr = self.output_ptr.add(1);
             }

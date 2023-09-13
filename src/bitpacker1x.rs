@@ -51,6 +51,10 @@ mod scalar {
         left.wrapping_sub(right)
     }
 
+    fn staircase() -> DataType {
+        1
+    }
+
     // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.
     //
     // For other bitpacker, we enable specific CPU instruction set, but for the
