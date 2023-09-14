@@ -59,6 +59,16 @@ mod sse3 {
         _mm_add_epi32(offset, a_ab_abc_abcd)
     }
 
+    #[target_feature(enable = "sse3")]
+    #[inline]
+    unsafe fn add(left: DataType, right: DataType) -> DataType {
+        _mm_add_epi32(left, right)
+    }
+
+    unsafe fn sub(left: DataType, right: DataType) -> DataType {
+        _mm_sub_epi32(left, right)
+    }
+
     declare_bitpacker!(target_feature(enable = "sse3"));
 
     impl Available for UnsafeBitPackerImpl {
@@ -74,6 +84,7 @@ mod neon {
     use super::BLOCK_LEN;
     use crate::Available;
 
+    use super::scalar::add;
     use super::scalar::left_shift_32;
     use super::scalar::load_unaligned;
     use super::scalar::op_and;
@@ -82,6 +93,7 @@ mod neon {
     use super::scalar::right_shift_32;
     use super::scalar::set1;
     use super::scalar::store_unaligned;
+    use super::scalar::sub;
     use super::scalar::DataType;
     use std::arch::aarch64::{vaddq_u32, vdupq_n_u32, vextq_u32, vld1q_u32, vst1q_u32, vsubq_u32};
 
@@ -109,6 +121,10 @@ mod neon {
         vst1q_u32(r.as_mut_ptr(), vaddq_u32(base, a_ab_abc_abcd));
         r
     }
+
+    // TODO trinity-1686a: I believe add/sub are easy enough for the compiler to optimize on its
+    // own, and suspect hand-rolled impl would force (un)loading registers and make things slower
+    // overall
 
     declare_bitpacker!(target_feature(enable = "neon"));
 
@@ -184,6 +200,24 @@ mod scalar {
         let el2 = el1.wrapping_add(delta[2]);
         let el3 = el2.wrapping_add(delta[3]);
         [el0, el1, el2, el3]
+    }
+
+    pub(crate) fn add(left: DataType, right: DataType) -> DataType {
+        [
+            left[0].wrapping_add(right[0]),
+            left[1].wrapping_add(right[1]),
+            left[2].wrapping_add(right[2]),
+            left[3].wrapping_add(right[3]),
+        ]
+    }
+
+    pub(crate) fn sub(left: DataType, right: DataType) -> DataType {
+        [
+            left[0].wrapping_sub(right[0]),
+            left[1].wrapping_sub(right[1]),
+            left[2].wrapping_sub(right[2]),
+            left[3].wrapping_sub(right[3]),
+        ]
     }
 
     // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.
@@ -286,6 +320,39 @@ impl BitPacker for BitPacker4x {
         }
     }
 
+    fn compress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize {
+        unsafe {
+            match self.0 {
+                #[cfg(target_arch = "x86_64")]
+                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::compress_strictly_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
+                #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+                InstructionSet::NEON => neon::UnsafeBitPackerImpl::compress_strictly_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::compress_strictly_sorted(
+                    initial,
+                    decompressed,
+                    compressed,
+                    num_bits,
+                ),
+            }
+        }
+    }
+
     fn decompress(&self, compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize {
         unsafe {
             match self.0 {
@@ -300,6 +367,39 @@ impl BitPacker for BitPacker4x {
                 InstructionSet::Scalar => {
                     scalar::UnsafeBitPackerImpl::decompress(compressed, decompressed, num_bits)
                 }
+            }
+        }
+    }
+
+    fn decompress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize {
+        unsafe {
+            match self.0 {
+                #[cfg(target_arch = "x86_64")]
+                InstructionSet::SSE3 => sse3::UnsafeBitPackerImpl::decompress_strictly_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
+                #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+                InstructionSet::NEON => neon::UnsafeBitPackerImpl::decompress_strictly_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
+                InstructionSet::Scalar => scalar::UnsafeBitPackerImpl::decompress_strictly_sorted(
+                    initial,
+                    compressed,
+                    decompressed,
+                    num_bits,
+                ),
             }
         }
     }
@@ -366,6 +466,24 @@ impl BitPacker for BitPacker4x {
             }
         }
     }
+
+    fn num_bits_strictly_sorted(&self, initial: Option<u32>, decompressed: &[u32]) -> u8 {
+        unsafe {
+            match self.0 {
+                #[cfg(target_arch = "x86_64")]
+                InstructionSet::SSE3 => {
+                    sse3::UnsafeBitPackerImpl::num_bits_strictly_sorted(initial, decompressed)
+                }
+                #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
+                InstructionSet::NEON => {
+                    neon::UnsafeBitPackerImpl::num_bits_strictly_sorted(initial, decompressed)
+                }
+                InstructionSet::Scalar => {
+                    scalar::UnsafeBitPackerImpl::num_bits_strictly_sorted(initial, decompressed)
+                }
+            }
+        }
+    }
 }
 
 #[cfg(any(
@@ -380,7 +498,7 @@ mod tests {
     use crate::Available;
     use crate::{BitPacker, BitPacker4x};
 
-    #[cfg(target_arch = "x64_64")]
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn test_compatible_sse3() {
         use super::sse3;

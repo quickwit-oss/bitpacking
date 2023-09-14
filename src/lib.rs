@@ -47,6 +47,12 @@ trait UnsafeBitPacker {
         compressed: &mut [u8],
         num_bits: u8,
     ) -> usize;
+    unsafe fn compress_strictly_sorted(
+        initial: Option<u32>,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize;
     unsafe fn decompress(compressed: &[u8], decompressed: &mut [u32], num_bits: u8) -> usize;
     unsafe fn decompress_sorted(
         initial: u32,
@@ -54,8 +60,15 @@ trait UnsafeBitPacker {
         decompressed: &mut [u32],
         num_bits: u8,
     ) -> usize;
+    unsafe fn decompress_strictly_sorted(
+        initial: Option<u32>,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize;
     unsafe fn num_bits(decompressed: &[u32]) -> u8;
     unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8;
+    unsafe fn num_bits_strictly_sorted(initial: Option<u32>, decompressed: &[u32]) -> u8;
 }
 
 /// # Examples without delta-encoding
@@ -211,6 +224,32 @@ pub trait BitPacker: Sized + Clone + Copy {
         num_bits: u8,
     ) -> usize;
 
+    /// Delta encode and compress the `decompressed` array.
+    ///
+    /// Assumes that the elements in the `decompressed` array are strictly
+    /// monotonous, that is, each element is strictly greater than the previous.
+    ///
+    /// This codec can be more efficient that the simply sorted compressor by up to one bit per
+    /// integer. This has an important impact on saturated or nearly saturated datasets (almost
+    /// every number appears in sequence), but isn't very different from the sorted compressor
+    /// on more sparse datasets.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if `initial` is greater or equal to `decompressed[0]`
+    /// - Panics if `decompressed` isn't strictly monotonic
+    /// - Panics if `decompressed`'s length is not exactly `BLOCK_LEN`
+    /// - Panics if `compressed` is not large enough to receive the compressed data
+    ///
+    /// Returns the amount of bytes in the compressed block.
+    fn compress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        decompressed: &[u32],
+        compressed: &mut [u8],
+        num_bits: u8,
+    ) -> usize;
+
     /// Decompress the `compress` array to the `decompressed` array.
     ///
     /// Returns the amount of bytes that were consumed.
@@ -240,6 +279,27 @@ pub trait BitPacker: Sized + Clone + Copy {
         num_bits: u8,
     ) -> usize;
 
+    /// Decompress the`compress`array to the `decompressed` array.
+    /// The `compressed` array is assumed to have been strict-delta-encoded and compressed.
+    ///
+    /// `initial` must be the value that was passed as the `initial` argument compressing
+    /// the block.
+    ///
+    /// Returns the amount of bytes that have been read.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the compressed array is too short to contain `BLOCK_LEN` elements
+    /// - Panics if the decompressed array is too short.
+
+    fn decompress_strictly_sorted(
+        &self,
+        initial: Option<u32>,
+        compressed: &[u8],
+        decompressed: &mut [u32],
+        num_bits: u8,
+    ) -> usize;
+
     /// Returns the minimum number of bits used to represent the largest integer in the
     /// `decompressed` block.
     ///
@@ -255,6 +315,14 @@ pub trait BitPacker: Sized + Clone + Copy {
     ///
     /// Panics if `decompressed`'s len is not exactly `BLOCK_LEN`.
     fn num_bits_sorted(&self, initial: u32, decompressed: &[u32]) -> u8;
+
+    /// Returns the minimum number of bits used to represent the largest `delta-1` in the deltas in the
+    /// `decompressed` block.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `decompressed`'s len is not exactly `BLOCK_LEN`.
+    fn num_bits_strictly_sorted(&self, initial: Option<u32>, decompressed: &[u32]) -> u8;
 
     /// Returns the size of a compressed block.
     fn compressed_block_size(num_bits: u8) -> usize {
@@ -273,7 +341,7 @@ fn most_significant_bit(v: u32) -> u8 {
 
 #[cfg(feature = "bitpacker1x")]
 mod bitpacker1x;
-#[cfg(all(feature = "bitpacker4x", not(debug_assertions)))]
+#[cfg(all(feature = "bitpacker4x", any(test, not(debug_assertion))))]
 mod bitpacker4x;
 
 #[cfg(all(feature = "bitpacker4x", debug_assertions))]
