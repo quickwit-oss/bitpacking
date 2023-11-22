@@ -3,117 +3,82 @@
 
 use super::{BitPacker, UnsafeBitPacker};
 
-const BLOCK_LEN: usize = 32 * 4;
+const BLOCK_LEN: usize = 32;
 
 mod scalar {
-    use super::BLOCK_LEN;
-    use std::ptr;
+    use std::ptr::read_unaligned as load_unaligned;
+    use std::ptr::write_unaligned as store_unaligned;
 
-    type DataType = [u32; 4];
+    use super::BLOCK_LEN;
+    use crate::Available;
+
+    type DataType = u32;
 
     fn set1(el: i32) -> DataType {
-        [el as u32; 4]
+        el as u32
     }
 
     fn right_shift_32(el: DataType, shift: i32) -> DataType {
-        [
-            el[0] >> shift,
-            el[1] >> shift,
-            el[2] >> shift,
-            el[3] >> shift,
-        ]
+        el >> shift
     }
 
     fn left_shift_32(el: DataType, shift: i32) -> DataType {
-        [
-            el[0] << shift,
-            el[1] << shift,
-            el[2] << shift,
-            el[3] << shift,
-        ]
+        el << shift
     }
 
     fn op_or(left: DataType, right: DataType) -> DataType {
-        [
-            left[0] | right[0],
-            left[1] | right[1],
-            left[2] | right[2],
-            left[3] | right[3],
-        ]
+        left | right
     }
 
     fn op_and(left: DataType, right: DataType) -> DataType {
-        [
-            left[0] & right[0],
-            left[1] & right[1],
-            left[2] & right[2],
-            left[3] & right[3],
-        ]
-    }
-
-    unsafe fn load_unaligned(addr: *const DataType) -> DataType {
-        ptr::read_unaligned(addr)
-    }
-
-    unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
-        ptr::write_unaligned(addr, data);
+        left & right
     }
 
     fn or_collapse_to_u32(accumulator: DataType) -> u32 {
-        (accumulator[0] | accumulator[1]) | (accumulator[2] | accumulator[3])
+        accumulator
     }
 
     fn compute_delta(curr: DataType, prev: DataType) -> DataType {
-        [
-            curr[0].wrapping_sub(prev[3]),
-            curr[1].wrapping_sub(curr[0]),
-            curr[2].wrapping_sub(curr[1]),
-            curr[3].wrapping_sub(curr[2]),
-        ]
+        curr.wrapping_sub(prev)
     }
 
     fn integrate_delta(offset: DataType, delta: DataType) -> DataType {
-        let el0 = offset[3].wrapping_add(delta[0]);
-        let el1 = el0.wrapping_add(delta[1]);
-        let el2 = el1.wrapping_add(delta[2]);
-        let el3 = el2.wrapping_add(delta[3]);
-        [el0, el1, el2, el3]
+        offset.wrapping_add(delta)
     }
 
     fn add(left: DataType, right: DataType) -> DataType {
-        [
-            left[0].wrapping_add(right[0]),
-            left[1].wrapping_add(right[1]),
-            left[2].wrapping_add(right[2]),
-            left[3].wrapping_add(right[3]),
-        ]
+        left.wrapping_add(right)
     }
 
     fn sub(left: DataType, right: DataType) -> DataType {
-        [
-            left[0].wrapping_sub(right[0]),
-            left[1].wrapping_sub(right[1]),
-            left[2].wrapping_sub(right[2]),
-            left[3].wrapping_sub(right[3]),
-        ]
+        left.wrapping_sub(right)
     }
 
+    // The `cfg(any(debug, not(debug)))` is here to put an attribute that has no effect.
+    //
+    // For other bitpacker, we enable specific CPU instruction set, but for the
+    // scalar bitpacker none is required.
     declare_bitpacker_simple!(cfg(any(debug, not(debug))));
+
+    impl Available for UnsafeBitPackerImpl {
+        fn available() -> bool {
+            true
+        }
+    }
 }
 
-/// `BitPacker4x` packs integers in groups of 4. This gives an opportunity
-/// to leverage `SSE3` instructions to encode and decode the stream.
+/// `BitPacker1x` is standard bitpacking : the integer representation over
+/// `b` bits are simply concatenated one after the other.
 ///
-/// One block must contain `128 integers`.
+/// One block must contain `32 integers`.
 #[derive(Clone, Copy)]
-pub struct BitPacker4x;
+pub struct BitPacker1x;
 
-impl BitPacker for BitPacker4x {
+impl BitPacker for BitPacker1x {
     const BLOCK_LEN: usize = BLOCK_LEN;
 
-    /// Returns the best available implementation for the current CPU.
-    fn new() -> Self {
-        BitPacker4x
+    fn new() -> BitPacker1x {
+        BitPacker1x
     }
 
     fn compress(&self, decompressed: &[u32], compressed: &mut [u8], num_bits: u8) -> usize {
