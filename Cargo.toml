@@ -6,6 +6,8 @@ license = "MIT"
 readme = "README.md"
 keywords = ["integer", "compression", "bitpacking"]
 description = "Fast integer compression/decompression via SIMD bit-packing. Port of simdcomp to rust."
+repository = "https://github.com/quickwit-oss/bitpacking"
+homepage = "https://github.com/quickwit-oss/bitpacking"
 edition = "2021"
 
 [dependencies]
