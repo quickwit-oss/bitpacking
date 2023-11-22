@@ -341,7 +341,7 @@ fn most_significant_bit(v: u32) -> u8 {
 
 #[cfg(feature = "bitpacker1x")]
 mod bitpacker1x;
-#[cfg(all(feature = "bitpacker4x", any(test, not(debug_assertion))))]
+#[cfg(all(feature = "bitpacker4x", any(test, not(debug_assertions))))]
 mod bitpacker4x;
 
 #[cfg(all(feature = "bitpacker4x", debug_assertions))]
