@@ -339,19 +339,23 @@ fn most_significant_bit(v: u32) -> u8 {
     }
 }
 
-#[cfg(feature = "bitpacker1x")]
+#[cfg(all(feature = "bitpacker1x", any(test, not(debug_assertions))))]
 mod bitpacker1x;
 #[cfg(all(feature = "bitpacker4x", any(test, not(debug_assertions))))]
 mod bitpacker4x;
 
+#[cfg(all(feature = "bitpacker1x", debug_assertions))]
+mod bitpacker1x_simple;
 #[cfg(all(feature = "bitpacker4x", debug_assertions))]
 mod bitpacker4x_simple;
 
 #[cfg(feature = "bitpacker8x")]
 mod bitpacker8x;
 
-#[cfg(feature = "bitpacker1x")]
+#[cfg(all(feature = "bitpacker1x", not(debug_assertions)))]
 pub use bitpacker1x::BitPacker1x;
+#[cfg(all(feature = "bitpacker1x", debug_assertions))]
+pub use bitpacker1x_simple::BitPacker1x;
 
 #[cfg(all(feature = "bitpacker4x", not(debug_assertions)))]
 pub use bitpacker4x::BitPacker4x;
