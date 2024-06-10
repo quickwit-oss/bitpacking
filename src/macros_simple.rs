@@ -28,8 +28,8 @@ macro_rules! declare_bitpacker_simple {
                 num_bytes_per_block
             );
 
-            let input_ptr = input_arr.as_ptr() as *const DataType;
-            let mut output_ptr = output_arr.as_mut_ptr() as *mut DataType;
+            let input_ptr = input_arr.as_ptr().cast::<DataType>();
+            let mut output_ptr = output_arr.as_mut_ptr().cast::<DataType>();
             let mut out_register: DataType = delta_computer.transform(load_unaligned(input_ptr));
 
             for i in 1..31 {
@@ -85,8 +85,8 @@ macro_rules! declare_bitpacker_simple {
                 num_bytes_per_block
             );
 
-            let input_ptr: *const DataType = input_arr.as_ptr() as *const DataType;
-            let output_ptr = output_arr.as_mut_ptr() as *mut DataType;
+            let input_ptr: *const DataType = input_arr.as_ptr().cast::<DataType>();
+            let output_ptr = output_arr.as_mut_ptr().cast::<DataType>();
             for i in 0..32 {
                 let input_offset_ptr = input_ptr.offset(i as isize);
                 let output_offset_ptr = output_ptr.offset(i as isize);
@@ -110,7 +110,7 @@ macro_rules! declare_bitpacker_simple {
                 num_bytes_per_block
             );
 
-            let mut input_ptr = compressed.as_ptr() as *const DataType;
+            let mut input_ptr = compressed.as_ptr().cast::<DataType>();
 
             let mask_scalar: u32 = ((1u64 << num_bits) - 1u64) as u32;
             let mask = set1(mask_scalar as i32);
@@ -158,7 +158,7 @@ macro_rules! declare_bitpacker_simple {
                 compressed.len(),
                 num_bytes_per_block
             );
-            let input_ptr = compressed.as_ptr() as *const DataType;
+            let input_ptr = compressed.as_ptr().cast::<DataType>();
             for i in 0..32 {
                 let input_offset_ptr = input_ptr.offset(i as isize);
                 let in_register: DataType = load_unaligned(input_offset_ptr);
@@ -335,7 +335,7 @@ macro_rules! declare_bitpacker_simple {
                     decompressed.len(),
                     BLOCK_LEN
                 );
-                let output_ptr = decompressed.as_mut_ptr() as *mut DataType;
+                let output_ptr = decompressed.as_mut_ptr().cast::<DataType>();
                 let mut output = Store::new(output_ptr);
                 if num_bits == 0u8 {
                     let zero = set1(0i32);
@@ -362,7 +362,7 @@ macro_rules! declare_bitpacker_simple {
                     decompressed.len(),
                     BLOCK_LEN
                 );
-                let output_ptr = decompressed.as_mut_ptr() as *mut DataType;
+                let output_ptr = decompressed.as_mut_ptr().cast::<DataType>();
                 let mut output = DeltaIntegrate::new(initial, output_ptr);
                 if num_bits == 0u8 {
                     let zero = set1(0i32);
@@ -390,7 +390,7 @@ macro_rules! declare_bitpacker_simple {
                     BLOCK_LEN
                 );
                 let initial = initial.unwrap_or(u32::MAX);
-                let output_ptr = decompressed.as_mut_ptr() as *mut DataType;
+                let output_ptr = decompressed.as_mut_ptr().cast::<DataType>();
                 let mut output = StrictDeltaIntegrate::new(initial, output_ptr);
                 if num_bits == 0u8 {
                     let zero = set1(0i32);
@@ -412,7 +412,7 @@ macro_rules! declare_bitpacker_simple {
                     "`decompressed`'s len is not `BLOCK_LEN={}`",
                     BLOCK_LEN
                 );
-                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+                let data: *const DataType = decompressed.as_ptr().cast::<DataType>();
                 let mut accumulator = load_unaligned(data);
                 for i in 1..32 {
                     let newvec = load_unaligned(data.add(i));
@@ -423,7 +423,7 @@ macro_rules! declare_bitpacker_simple {
 
             unsafe fn num_bits_sorted(initial: u32, decompressed: &[u32]) -> u8 {
                 let initial_vec = set1(initial as i32);
-                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+                let data: *const DataType = decompressed.as_ptr().cast::<DataType>();
                 let first = load_unaligned(data);
                 let mut accumulator = compute_delta(load_unaligned(data), initial_vec);
                 let mut previous = first;
@@ -444,7 +444,7 @@ macro_rules! declare_bitpacker_simple {
             unsafe fn num_bits_strictly_sorted(initial: Option<u32>, decompressed: &[u32]) -> u8 {
                 let initial = initial.unwrap_or(u32::MAX);
                 let initial_vec = set1(initial as i32);
-                let data: *const DataType = decompressed.as_ptr() as *const DataType;
+                let data: *const DataType = decompressed.as_ptr().cast::<DataType>();
                 let first = load_unaligned(data);
                 let one = set1(1);
                 let mut accumulator = sub(compute_delta(load_unaligned(data), initial_vec), one);
