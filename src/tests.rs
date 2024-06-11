@@ -1,7 +1,6 @@
-extern crate rand;
-
-use self::rand::distributions::Uniform;
-use self::rand::prelude::*;
+use rand::distributions::{Distribution as _, Uniform};
+use rand::rngs::StdRng;
+use rand::SeedableRng as _;
 use super::most_significant_bit;
 use super::UnsafeBitPacker;
 
@@ -60,8 +59,8 @@ fn test_util_compress_decompress<TBitPacker: UnsafeBitPacker>(data: &[u32], expe
 
         original.copy_from_slice(data);
 
-        let mut compressed = vec![0u8; (TBitPacker::BLOCK_LEN as usize) * 4];
-        let mut result = vec![0u32; TBitPacker::BLOCK_LEN as usize];
+        let mut compressed = vec![0u8; TBitPacker::BLOCK_LEN * 4];
+        let mut result = vec![0u32; TBitPacker::BLOCK_LEN];
 
         let numbits = TBitPacker::num_bits(&original[..]);
         assert_eq!(numbits, expected_num_bits);
@@ -79,9 +78,7 @@ fn test_util_compress_decompress<TBitPacker: UnsafeBitPacker>(data: &[u32], expe
             assert_eq!(
                 original[i],
                 result[i],
-                "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}",
-                i,
-                expected_num_bits,
+                "Failed at index {i}, for expect_num_bits {expected_num_bits}, \nORIGINAL {:?} \nRESULT {:?}",
                 &original[..i + 5],
                 &result[..i + 5]
             );
@@ -98,16 +95,15 @@ fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(
     for initial in 0u32..2u32 {
         let mut original = data.to_owned();
         integrate_data(initial, &mut original);
-        let mut compressed = vec![0u8; (TBitPacker::BLOCK_LEN as usize) * 4];
-        let mut result = vec![0u32; TBitPacker::BLOCK_LEN as usize];
+        let mut compressed = vec![0u8; TBitPacker::BLOCK_LEN * 4];
+        let mut result = vec![0u32; TBitPacker::BLOCK_LEN];
 
         unsafe {
             let numbits = TBitPacker::num_bits_sorted(initial, &original[..]);
             assert_eq!(
                 numbits,
                 expected_num_bits,
-                "Failed identifying max bits. Initial {}. Shifted data {:?}",
-                initial,
+                "Failed identifying max bits. Initial {initial}. Shifted data {:?}",
                 &original[..5]
             );
 
@@ -129,9 +125,7 @@ fn test_util_compress_decompress_delta<TBitPacker: UnsafeBitPacker>(
                 assert_eq!(
                     original[i],
                     result[i],
-                    "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}",
-                    i,
-                    expected_num_bits,
+                    "Failed at index {i}, for expect_num_bits {expected_num_bits}, \nORIGINAL {:?} \nRESULT {:?}",
                     &original[..std::cmp::min(i + 5, original.len())],
                     &result[..std::cmp::min(i + 5, result.len())]
                 );
@@ -148,16 +142,15 @@ fn test_util_compress_decompress_strict_delta<TBitPacker: UnsafeBitPacker>(
     for initial in [None, Some(0u32), Some(1u32)] {
         let mut original = data.to_owned();
         strict_integrate_data(initial, &mut original);
-        let mut compressed = vec![0u8; (TBitPacker::BLOCK_LEN as usize) * 4];
-        let mut result = vec![0u32; TBitPacker::BLOCK_LEN as usize];
+        let mut compressed = vec![0u8; TBitPacker::BLOCK_LEN * 4];
+        let mut result = vec![0u32; TBitPacker::BLOCK_LEN];
 
         unsafe {
             let numbits = TBitPacker::num_bits_strictly_sorted(initial, &original[..]);
             assert_eq!(
                 numbits,
                 expected_num_bits,
-                "Failed identifying max bits. Initial {:?}. Shifted data {:?}",
-                initial,
+                "Failed identifying max bits. Initial {initial:?}. Shifted data {:?}",
                 &original[..5]
             );
 
@@ -184,9 +177,7 @@ fn test_util_compress_decompress_strict_delta<TBitPacker: UnsafeBitPacker>(
                 assert_eq!(
                     original[i],
                     result[i],
-                    "Failed at index {}, for expect_num_bits {}, \nORIGINAL {:?} \nRESULT {:?}",
-                    i,
-                    expected_num_bits,
+                    "Failed at index {i}, for expect_num_bits {expected_num_bits}, \nORIGINAL {:?} \nRESULT {:?}",
                     &original[..std::cmp::min(i + 5, original.len())],
                     &result[..std::cmp::min(i + 5, result.len())],
                 );
@@ -210,17 +201,17 @@ pub(crate) fn test_suite_compress_decompress<TBitPacker: UnsafeBitPacker>(delta:
             let block = &original[i * TBitPacker::BLOCK_LEN..(i + 1) * TBitPacker::BLOCK_LEN];
             let computed_num_bits = block
                 .iter()
-                .cloned()
+                .copied()
                 .map(most_significant_bit)
                 .max()
                 .unwrap_or(0u8);
             assert!(computed_num_bits <= num_bits);
             match delta {
                 DeltaKind::Delta => {
-                    test_util_compress_decompress::<TBitPacker>(block, computed_num_bits)
+                    test_util_compress_decompress::<TBitPacker>(block, computed_num_bits);
                 }
                 DeltaKind::NoDelta => {
-                    test_util_compress_decompress_delta::<TBitPacker>(block, computed_num_bits)
+                    test_util_compress_decompress_delta::<TBitPacker>(block, computed_num_bits);
                 }
                 DeltaKind::StrictDelta => test_util_compress_decompress_strict_delta::<TBitPacker>(
                     block,

@@ -8,7 +8,7 @@ use crate::Available;
 
 const BLOCK_LEN: usize = 32 * 4;
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 mod sse3 {
 
     use super::BLOCK_LEN;

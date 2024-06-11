@@ -73,8 +73,6 @@ trait UnsafeBitPacker {
 
 /// # Examples without delta-encoding
 /// ```
-/// extern crate bitpacking;
-///
 /// use bitpacking::{BitPacker4x, BitPacker};
 ///
 /// # fn main() {
@@ -118,8 +116,6 @@ trait UnsafeBitPacker {
 /// integration or prefix sum) on them.
 ///
 /// ```
-/// extern crate bitpacking;
-///
 /// use bitpacking::{BitPacker4x, BitPacker};
 ///
 /// # fn main() {
@@ -325,6 +321,7 @@ pub trait BitPacker: Sized + Clone + Copy {
     fn num_bits_strictly_sorted(&self, initial: Option<u32>, decompressed: &[u32]) -> u8;
 
     /// Returns the size of a compressed block.
+    #[must_use]
     fn compressed_block_size(num_bits: u8) -> usize {
         Self::BLOCK_LEN * (num_bits as usize) / 8
     }
@@ -413,7 +410,7 @@ mod functional_tests {
         #[test]
         fn check_sorted_block(
             (values, init_value) in prop::collection::vec(u32::arbitrary(), BitPacker4x::BLOCK_LEN).prop_flat_map(|mut values| {
-                values.sort();
+                values.sort_unstable();
                 let min_value = values[0];
                 (Just(values), (0..=min_value))
             }),
