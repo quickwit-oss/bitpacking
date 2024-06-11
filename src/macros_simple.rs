@@ -49,7 +49,7 @@ macro_rules! declare_bitpacker_simple {
 
                 if remaining <= num_bits {
                     store_unaligned(output_ptr, out_register);
-                    output_ptr = output_ptr.offset(1);
+                    output_ptr = output_ptr.add(1);
                     if remaining < num_bits {
                         out_register = right_shift_32(in_register, remaining as i32);
                     }
@@ -88,8 +88,8 @@ macro_rules! declare_bitpacker_simple {
             let input_ptr: *const DataType = input_arr.as_ptr() as *const DataType;
             let output_ptr = output_arr.as_mut_ptr() as *mut DataType;
             for i in 0..32 {
-                let input_offset_ptr = input_ptr.offset(i as isize);
-                let output_offset_ptr = output_ptr.offset(i as isize);
+                let input_offset_ptr = input_ptr.add(i);
+                let output_offset_ptr = output_ptr.add(i);
                 let input_register = load_unaligned(input_offset_ptr);
                 let output_register = delta_computer.transform(input_register);
                 store_unaligned(output_offset_ptr, output_register);
@@ -160,7 +160,7 @@ macro_rules! declare_bitpacker_simple {
             );
             let input_ptr = compressed.as_ptr() as *const DataType;
             for i in 0..32 {
-                let input_offset_ptr = input_ptr.offset(i as isize);
+                let input_offset_ptr = input_ptr.add(i);
                 let in_register: DataType = load_unaligned(input_offset_ptr);
                 output.process(in_register);
             }
