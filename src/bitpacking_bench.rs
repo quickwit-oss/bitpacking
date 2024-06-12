@@ -1,8 +1,4 @@
-#[macro_use]
-extern crate criterion;
-extern crate bitpacking;
-
-use self::criterion::{Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 
 use bitpacking::{BitPacker, BitPacker1x, BitPacker4x, BitPacker8x};
 use criterion::Benchmark;
@@ -37,7 +33,7 @@ enum DataType {
 fn create_array(block_len: usize, num_bits_arr: &[u8], data_type: DataType) -> Vec<u32> {
     let mut original_values = vec![];
     for &num_bits in num_bits_arr {
-        let val: u32 = (1u64 << (num_bits as u64) - 1u64) as u32;
+        let val: u32 = (1u64 << (u64::from(num_bits) - 1)) as u32;
         for _ in 0..block_len {
             original_values.push(val);
         }
@@ -56,7 +52,7 @@ fn bench_decompress_util<TBitPacker: BitPacker + 'static>(
     num_bits_arr: &[u8],
 ) {
     let num_blocks = num_bits_arr.len();
-    let original_values = create_array(TBitPacker::BLOCK_LEN, &num_bits_arr, DataType::NoDelta);
+    let original_values = create_array(TBitPacker::BLOCK_LEN, num_bits_arr, DataType::NoDelta);
     let mut compressed = vec![0u8; original_values.len() * 4];
     let mut num_bits_vec = Vec::with_capacity(num_bits_arr.len());
     let mut offset = 0;
@@ -72,7 +68,7 @@ fn bench_decompress_util<TBitPacker: BitPacker + 'static>(
     let mut result: Vec<u32> = vec![0u32; original_values.len()];
     bencher.iter(|| {
         let mut offset = 0;
-        for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
+        for (i, num_bits) in num_bits_vec.iter().copied().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
             bitpacker.decompress(&compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
@@ -113,7 +109,7 @@ fn bench_decompress_delta_util<TBitPacker: BitPacker + 'static>(
     let initial_value = 3u32;
     let original_values = create_array(
         TBitPacker::BLOCK_LEN,
-        &num_bits_arr,
+        num_bits_arr,
         DataType::Delta(initial_value),
     );
     let mut compressed = vec![0u8; original_values.len() * 4];
@@ -131,7 +127,7 @@ fn bench_decompress_delta_util<TBitPacker: BitPacker + 'static>(
     let mut result: Vec<u32> = vec![0u32; original_values.len()];
     bencher.iter(|| {
         let mut offset = 0;
-        for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
+        for (i, num_bits) in num_bits_vec.iter().copied().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
             bitpacker.decompress_sorted(initial_value, &compressed[offset..], dest_block, num_bits);
             offset += (num_bits as usize) * TBitPacker::BLOCK_LEN / 8;
@@ -172,7 +168,7 @@ fn bench_decompress_strict_delta_util<TBitPacker: BitPacker + 'static>(
     let initial_value = Some(3u32);
     let original_values = create_array(
         TBitPacker::BLOCK_LEN,
-        &num_bits_arr,
+        num_bits_arr,
         DataType::StrictDelta(initial_value),
     );
     let mut compressed = vec![0u8; original_values.len() * 4];
@@ -195,7 +191,7 @@ fn bench_decompress_strict_delta_util<TBitPacker: BitPacker + 'static>(
     let mut result: Vec<u32> = vec![0u32; original_values.len()];
     bencher.iter(|| {
         let mut offset = 0;
-        for (i, num_bits) in num_bits_vec.iter().cloned().enumerate() {
+        for (i, num_bits) in num_bits_vec.iter().copied().enumerate() {
             let dest_block = &mut result[i * TBitPacker::BLOCK_LEN..][..TBitPacker::BLOCK_LEN];
             bitpacker.decompress_strictly_sorted(
                 initial_value,
@@ -242,11 +238,11 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
     bitpacker: TBitPacker,
     criterion: &mut Criterion,
 ) {
-    for &num_bit in [1u8, 2u8, 24u8, 31u8].iter() {
+    for num_bit in [1u8, 2u8, 24u8, 31u8] {
         let num_bits = [num_bit; NUM_BLOCKS];
         criterion.bench(
             name,
-            Benchmark::new(format!("decompress-{}", num_bit).as_str(), move |b| {
+            Benchmark::new(format!("decompress-{num_bit}").as_str(), move |b| {
                 bench_decompress_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
@@ -255,7 +251,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
         );
         criterion.bench(
             name,
-            Benchmark::new(format!("decompress-delta-{}", num_bit).as_str(), move |b| {
+            Benchmark::new(format!("decompress-delta-{num_bit}").as_str(), move |b| {
                 bench_decompress_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
@@ -265,7 +261,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
         criterion.bench(
             name,
             Benchmark::new(
-                format!("decompress-strict-delta-{}", num_bit).as_str(),
+                format!("decompress-strict-delta-{num_bit}").as_str(),
                 move |b| {
                     bench_decompress_strict_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
                 },
@@ -276,7 +272,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
         );
         criterion.bench(
             name,
-            Benchmark::new(format!("compress-{}", num_bit).as_str(), move |b| {
+            Benchmark::new(format!("compress-{num_bit}").as_str(), move |b| {
                 bench_compress_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
@@ -285,7 +281,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
         );
         criterion.bench(
             name,
-            Benchmark::new(format!("compress-delta-{}", num_bit).as_str(), move |b| {
+            Benchmark::new(format!("compress-delta-{num_bit}").as_str(), move |b| {
                 bench_compress_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
             .throughput(Throughput::Elements(
@@ -295,7 +291,7 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
         criterion.bench(
             name,
             Benchmark::new(
-                format!("compress-strict-delta-{}", num_bit).as_str(),
+                format!("compress-strict-delta-{num_bit}").as_str(),
                 move |b| {
                     bench_compress_strict_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
                 },

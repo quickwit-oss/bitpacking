@@ -15,8 +15,8 @@ crunchy = "0.2"
 
 [dev-dependencies]
 rand = "0.8"
-criterion = "0.3"
-proptest = "1.0.0"
+criterion = { version = "0.3", features = ["html_reports"] }
+proptest = "1.4"
 
 [features]
 bitpacker1x = []
