@@ -61,7 +61,7 @@ mod avx2 {
             _mm256_add_epi32(___a__b__ca____e__f__ge_, a__b__ca_db_e__f__ge_fh_);
         let offseted_halved_prefix_sum = _mm256_add_epi32(halved_prefix_sum, offset);
         let select_last_low = _mm256_shuffle_epi32(offseted_halved_prefix_sum, 0xff);
-        let high_offset = _mm256_permute2f128_si256(select_last_low, select_last_low, 8);
+        let high_offset = _mm256_permute2f128_si256(select_last_low, select_last_low, 8 | 0);
         _mm256_add_epi32(high_offset, offseted_halved_prefix_sum)
     }
 
