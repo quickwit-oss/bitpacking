@@ -1,3 +1,9 @@
+// We could auto-include the README here to avoid duplicating documentation,
+//   #![doc = include_str!("../README.md")]
+// but at the moment that seems a bit too long(?),
+// so for now only do it during testing to validate README's examples.
+#![cfg_attr(doctest, doc = include_str!("../README.md"))]
+
 /*!  # Fast Bitpacking algorithms
 
 This crate is a **Rust port of [Daniel Lemire's simdcomp C library](https://github.com/lemire/simdcomp)**.
@@ -9,7 +15,7 @@ and requires integers to be encoded in block of different size..
 `BitPacker4x` and `BitPacker8x` are designed specifically to leverage `SSE3`
 and `AVX2` instructions respectively.
 
-The library will fallback to a scalar implementation if these instruction
+The library will fall back to a scalar implementation if these instruction
 sets are not available. For instance :
 - because your compilation target architecture is not `x86_64`
 - because the CPU you use is from an older generation
@@ -84,14 +90,21 @@ trait UnsafeBitPacker {
 /// #    8, 8, 10, 5, 13, 8, 11, 14, 7, 14, 4, 2, 9, 12, 14, 5, 15, 12, 0,
 /// #    12, 13, 3, 13, 5, 4, 15, 9, 8, 9, 3, 3, 3, 1, 12, 0, 6, 11, 11, 12, 4];
 ///
+/// // Detects if `SSE3` is available on the current computed
+/// // and uses the best available implementation accordingly.
 /// let bitpacker = BitPacker4x::new();
 ///
+/// // Computes the number of bits used for each integer in the blocks.
+/// // my_data is assumed to have a len of 128 for `BitPacker4x`.
 /// let num_bits: u8 = bitpacker.num_bits(&my_data);
+/// # assert_eq!(num_bits, 4);
 ///
-/// // A block will be take at most 4 bytes per-integers.
+/// // The compressed array will take exactly `num_bits * BitPacker4x::BLOCK_LEN / 8`.
+/// // But it is ok to have an output with a different len as long as it is larger
+/// // than this.
 /// let mut compressed = vec![0u8; 4 * BitPacker4x::BLOCK_LEN];
 ///
-/// # assert_eq!(num_bits, 4);
+/// // Compress returns the len.
 /// let compressed_len = bitpacker.compress(&my_data, &mut compressed[..], num_bits);
 ///
 /// assert_eq!((num_bits as usize) *  BitPacker4x::BLOCK_LEN / 8, compressed_len);
@@ -150,7 +163,7 @@ trait UnsafeBitPacker {
 ///
 /// let num_bits: u8 = bitpacker.num_bits_sorted(initial_value, &my_data);
 ///
-/// // A block will be take at most 4 bytes per-integers.
+/// // A block will take at most 4 bytes per-integers.
 /// let mut compressed = vec![0u8; 4 * BitPacker4x::BLOCK_LEN];
 ///
 /// # assert_eq!(num_bits, 4);
@@ -412,7 +425,7 @@ mod functional_tests {
             (values, init_value) in prop::collection::vec(u32::arbitrary(), BitPacker4x::BLOCK_LEN).prop_flat_map(|mut values| {
                 values.sort_unstable();
                 let min_value = values[0];
-                (Just(values), (0..=min_value))
+                (Just(values), 0..=min_value)
             }),
         ) {
             let bit_packer = BitPacker4x::new();
