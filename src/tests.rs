@@ -1,8 +1,8 @@
+use super::most_significant_bit;
+use super::UnsafeBitPacker;
 use rand::distributions::{Distribution as _, Uniform};
 use rand::rngs::StdRng;
 use rand::SeedableRng as _;
-use super::most_significant_bit;
-use super::UnsafeBitPacker;
 
 pub fn generate_array(n: usize, max_num_bits: u8) -> Vec<u32> {
     assert!(max_num_bits <= 32u8);

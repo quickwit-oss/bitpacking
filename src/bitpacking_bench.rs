@@ -1,10 +1,13 @@
-use criterion::{Bencher, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use std::time::Duration;
 
 use bitpacking::{BitPacker, BitPacker1x, BitPacker4x, BitPacker8x};
 use criterion::Benchmark;
 use criterion::Throughput;
 
 const NUM_BLOCKS: usize = 10;
+const SAMPLE_SIZE: usize = 10;
+const WARM_UP_TIME: Duration = Duration::from_millis(50);
 
 fn integrate_data(initial: u32, data: &mut [u32]) {
     let mut cumul = initial;
@@ -245,6 +248,8 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
             Benchmark::new(format!("decompress-{num_bit}").as_str(), move |b| {
                 bench_decompress_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
+            .warm_up_time(WARM_UP_TIME)
+            .sample_size(SAMPLE_SIZE)
             .throughput(Throughput::Elements(
                 (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
@@ -254,6 +259,8 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
             Benchmark::new(format!("decompress-delta-{num_bit}").as_str(), move |b| {
                 bench_decompress_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
+            .warm_up_time(WARM_UP_TIME)
+            .sample_size(SAMPLE_SIZE)
             .throughput(Throughput::Elements(
                 (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
@@ -266,6 +273,8 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
                     bench_decompress_strict_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
                 },
             )
+            .warm_up_time(WARM_UP_TIME)
+            .sample_size(SAMPLE_SIZE)
             .throughput(Throughput::Elements(
                 (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
@@ -275,6 +284,8 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
             Benchmark::new(format!("compress-{num_bit}").as_str(), move |b| {
                 bench_compress_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
+            .warm_up_time(WARM_UP_TIME)
+            .sample_size(SAMPLE_SIZE)
             .throughput(Throughput::Elements(
                 (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
@@ -284,6 +295,8 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
             Benchmark::new(format!("compress-delta-{num_bit}").as_str(), move |b| {
                 bench_compress_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
             })
+            .warm_up_time(WARM_UP_TIME)
+            .sample_size(SAMPLE_SIZE)
             .throughput(Throughput::Elements(
                 (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
@@ -296,6 +309,8 @@ fn criterion_benchmark_bitpacker<TBitPacker: BitPacker + 'static>(
                     bench_compress_strict_delta_util::<TBitPacker>(bitpacker, b, &num_bits[..]);
                 },
             )
+            .warm_up_time(WARM_UP_TIME)
+            .sample_size(SAMPLE_SIZE)
             .throughput(Throughput::Elements(
                 (NUM_BLOCKS * TBitPacker::BLOCK_LEN) as u64,
             )),
@@ -309,5 +324,9 @@ fn criterion_benchmark(criterion: &mut Criterion) {
     criterion_benchmark_bitpacker("BitPacker8x", BitPacker8x::new(), criterion);
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().warm_up_time(Duration::from_millis(50));
+    targets = criterion_benchmark
+}
 criterion_main!(benches);
