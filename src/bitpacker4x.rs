@@ -84,8 +84,8 @@ mod neon {
     use super::BLOCK_LEN;
     use crate::Available;
     use std::arch::aarch64::{
-        uint32x4_t, vaddq_u32, vandq_u32, vdupq_n_s32, vdupq_n_u32, vextq_u32, vgetq_lane_u32,
-        vld1q_u32, vorrq_u32, vshlq_u32, vst1q_u32, vsubq_u32,
+        uint32x4_t, vaddq_u32, vandq_u32, vdupq_n_u32, vextq_u32, vgetq_lane_u32, vld1q_u32,
+        vorrq_u32, vshlq_n_u32, vshrq_n_u32, vst1q_u32, vsubq_u32,
     };
 
     pub(crate) type DataType = uint32x4_t;
@@ -98,20 +98,84 @@ mod neon {
 
     #[inline]
     unsafe fn right_shift_32<const N: i32>(el: DataType) -> DataType {
-        // Create a vector with all elements set to -N
-        // negative shift amount means right shift
-        // Each lane is shifted by the corresponding value in the shift vector
-        let shift = vdupq_n_s32(-N);
-        vshlq_u32(el, shift)
+        // We unroll here because vshrq_n_u32 only accepts constants from 1 to 32.
+        match N {
+            0 => el,
+            1 => vshrq_n_u32::<1>(el),
+            2 => vshrq_n_u32::<2>(el),
+            3 => vshrq_n_u32::<3>(el),
+            4 => vshrq_n_u32::<4>(el),
+            5 => vshrq_n_u32::<5>(el),
+            6 => vshrq_n_u32::<6>(el),
+            7 => vshrq_n_u32::<7>(el),
+            8 => vshrq_n_u32::<8>(el),
+            9 => vshrq_n_u32::<9>(el),
+            10 => vshrq_n_u32::<10>(el),
+            11 => vshrq_n_u32::<11>(el),
+            12 => vshrq_n_u32::<12>(el),
+            13 => vshrq_n_u32::<13>(el),
+            14 => vshrq_n_u32::<14>(el),
+            15 => vshrq_n_u32::<15>(el),
+            16 => vshrq_n_u32::<16>(el),
+            17 => vshrq_n_u32::<17>(el),
+            18 => vshrq_n_u32::<18>(el),
+            19 => vshrq_n_u32::<19>(el),
+            20 => vshrq_n_u32::<20>(el),
+            21 => vshrq_n_u32::<21>(el),
+            22 => vshrq_n_u32::<22>(el),
+            23 => vshrq_n_u32::<23>(el),
+            24 => vshrq_n_u32::<24>(el),
+            25 => vshrq_n_u32::<25>(el),
+            26 => vshrq_n_u32::<26>(el),
+            27 => vshrq_n_u32::<27>(el),
+            28 => vshrq_n_u32::<28>(el),
+            29 => vshrq_n_u32::<29>(el),
+            30 => vshrq_n_u32::<30>(el),
+            31 => vshrq_n_u32::<31>(el),
+            32 => vshrq_n_u32::<32>(el),
+            _ => core::hint::unreachable_unchecked(),
+        }
     }
 
     #[inline]
     unsafe fn left_shift_32<const N: i32>(el: DataType) -> DataType {
-        // Create a vector with all elements set to N
-        // positive shift amount means left shift
-        // Each lane is shifted by the corresponding value in the shift vector
-        let shift = vdupq_n_s32(N);
-        vshlq_u32(el, shift)
+        // We unroll here because vshlq_n_u32 only accepts constants from 1 to 32.
+        match N {
+            0 => el,
+            1 => vshlq_n_u32::<1>(el),
+            2 => vshlq_n_u32::<2>(el),
+            3 => vshlq_n_u32::<3>(el),
+            4 => vshlq_n_u32::<4>(el),
+            5 => vshlq_n_u32::<5>(el),
+            6 => vshlq_n_u32::<6>(el),
+            7 => vshlq_n_u32::<7>(el),
+            8 => vshlq_n_u32::<8>(el),
+            9 => vshlq_n_u32::<9>(el),
+            10 => vshlq_n_u32::<10>(el),
+            11 => vshlq_n_u32::<11>(el),
+            12 => vshlq_n_u32::<12>(el),
+            13 => vshlq_n_u32::<13>(el),
+            14 => vshlq_n_u32::<14>(el),
+            15 => vshlq_n_u32::<15>(el),
+            16 => vshlq_n_u32::<16>(el),
+            17 => vshlq_n_u32::<17>(el),
+            18 => vshlq_n_u32::<18>(el),
+            19 => vshlq_n_u32::<19>(el),
+            20 => vshlq_n_u32::<20>(el),
+            21 => vshlq_n_u32::<21>(el),
+            22 => vshlq_n_u32::<22>(el),
+            23 => vshlq_n_u32::<23>(el),
+            24 => vshlq_n_u32::<24>(el),
+            25 => vshlq_n_u32::<25>(el),
+            26 => vshlq_n_u32::<26>(el),
+            27 => vshlq_n_u32::<27>(el),
+            28 => vshlq_n_u32::<28>(el),
+            29 => vshlq_n_u32::<29>(el),
+            30 => vshlq_n_u32::<30>(el),
+            31 => vshlq_n_u32::<31>(el),
+            32 => vdupq_n_u32(0),
+            _ => core::hint::unreachable_unchecked(),
+        }
     }
 
     #[inline]
