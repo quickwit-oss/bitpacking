@@ -98,6 +98,11 @@ mod neon {
 
     #[inline]
     unsafe fn right_shift_32<const N: i32>(el: DataType) -> DataType {
+        const {
+                assert!(N >= 0);
+                assert!(N <= 32);
+        }
+
         // We unroll here because vshrq_n_u32 only accepts constants from 1 to 32.
         match N {
             0 => el,
@@ -132,14 +137,19 @@ mod neon {
             29 => vshrq_n_u32::<29>(el),
             30 => vshrq_n_u32::<30>(el),
             31 => vshrq_n_u32::<31>(el),
-            32 => vshrq_n_u32::<32>(el),
+            32 => vdupq_n_u32(0),
             _ => core::hint::unreachable_unchecked(),
         }
     }
 
     #[inline]
     unsafe fn left_shift_32<const N: i32>(el: DataType) -> DataType {
-        // We unroll here because vshlq_n_u32 only accepts constants from 1 to 32.
+        const {
+                assert!(N >= 0);
+                assert!(N <= 32);
+        }
+
+        // We unroll here because vshlq_n_u32 only accepts constants from 0 to 31.
         match N {
             0 => el,
             1 => vshlq_n_u32::<1>(el),
@@ -178,11 +188,7 @@ mod neon {
         }
     }
 
-    #[inline]
-    unsafe fn op_or(left: DataType, right: DataType) -> DataType {
-        // Bitwise OR of two vectors
-        vorrq_u32(left, right)
-    }
+    use vorrq_u32 as op_or;
 
     #[inline]
     unsafe fn op_and(left: DataType, right: DataType) -> DataType {
