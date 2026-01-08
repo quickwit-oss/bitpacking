@@ -1,3 +1,11 @@
+# bitpacking 0.9.3
+
+- Performance improvements in BitPacker4x for ARM
+
+# bitpacking 0.9.1
+
+- Add strictly\_sorted variant of bitpackers which allow to compress sequence known to be strictly increasing (no equal element) in a slightly more compact format.
+
 # bitpacking 0.8.2
 
 - Much much faster compilation in debug mode. (#20)

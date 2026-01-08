@@ -21,7 +21,7 @@ It makes it possible to compress/decompress :
 Just add to your `Cargo.toml` :
 
 ```toml
-bitpacking = "0.5"
+bitpacking = "0.9"
 ```
 
 For some bitpacking flavor and for some platform, the bitpacking crate
