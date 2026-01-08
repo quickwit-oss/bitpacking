@@ -83,48 +83,165 @@ mod neon {
 
     use super::BLOCK_LEN;
     use crate::Available;
+    use std::arch::aarch64::{
+        uint32x4_t, vaddq_u32, vandq_u32, vdupq_n_u32, vextq_u32, vgetq_lane_u32, vld1q_u32,
+        vorrq_u32, vshlq_n_u32, vshrq_n_u32, vst1q_u32, vsubq_u32,
+    };
 
-    use super::scalar::add;
-    use super::scalar::left_shift_32;
-    use super::scalar::load_unaligned;
-    use super::scalar::op_and;
-    use super::scalar::op_or;
-    use super::scalar::or_collapse_to_u32;
-    use super::scalar::right_shift_32;
-    use super::scalar::set1;
-    use super::scalar::store_unaligned;
-    use super::scalar::sub;
-    use super::scalar::DataType;
-    use std::arch::aarch64::{vaddq_u32, vdupq_n_u32, vextq_u32, vld1q_u32, vst1q_u32, vsubq_u32};
+    pub(crate) type DataType = uint32x4_t;
 
-    #[target_feature(enable = "neon")]
-    unsafe fn compute_delta(curr: DataType, prev: DataType) -> DataType {
-        let c = vld1q_u32(curr.as_ptr());
-        let p = vld1q_u32(prev.as_ptr());
-        let mut r = set1(0);
-        vst1q_u32(r.as_mut_ptr(), vsubq_u32(c, vextq_u32(p, c, 3)));
-        r
+    #[inline]
+    /// Creates a vector with all elements set to `el`.
+    unsafe fn set1(el: i32) -> DataType {
+        vdupq_n_u32(el as u32)
     }
 
-    #[target_feature(enable = "neon")]
+    #[inline]
+    unsafe fn right_shift_32<const N: i32>(el: DataType) -> DataType {
+        const {
+                assert!(N >= 0);
+                assert!(N <= 32);
+        }
+
+        // We unroll here because vshrq_n_u32 only accepts constants from 1 to 32.
+        match N {
+            0 => el,
+            1 => vshrq_n_u32::<1>(el),
+            2 => vshrq_n_u32::<2>(el),
+            3 => vshrq_n_u32::<3>(el),
+            4 => vshrq_n_u32::<4>(el),
+            5 => vshrq_n_u32::<5>(el),
+            6 => vshrq_n_u32::<6>(el),
+            7 => vshrq_n_u32::<7>(el),
+            8 => vshrq_n_u32::<8>(el),
+            9 => vshrq_n_u32::<9>(el),
+            10 => vshrq_n_u32::<10>(el),
+            11 => vshrq_n_u32::<11>(el),
+            12 => vshrq_n_u32::<12>(el),
+            13 => vshrq_n_u32::<13>(el),
+            14 => vshrq_n_u32::<14>(el),
+            15 => vshrq_n_u32::<15>(el),
+            16 => vshrq_n_u32::<16>(el),
+            17 => vshrq_n_u32::<17>(el),
+            18 => vshrq_n_u32::<18>(el),
+            19 => vshrq_n_u32::<19>(el),
+            20 => vshrq_n_u32::<20>(el),
+            21 => vshrq_n_u32::<21>(el),
+            22 => vshrq_n_u32::<22>(el),
+            23 => vshrq_n_u32::<23>(el),
+            24 => vshrq_n_u32::<24>(el),
+            25 => vshrq_n_u32::<25>(el),
+            26 => vshrq_n_u32::<26>(el),
+            27 => vshrq_n_u32::<27>(el),
+            28 => vshrq_n_u32::<28>(el),
+            29 => vshrq_n_u32::<29>(el),
+            30 => vshrq_n_u32::<30>(el),
+            31 => vshrq_n_u32::<31>(el),
+            32 => vdupq_n_u32(0),
+            _ => core::hint::unreachable_unchecked(),
+        }
+    }
+
+    #[inline]
+    unsafe fn left_shift_32<const N: i32>(el: DataType) -> DataType {
+        const {
+                assert!(N >= 0);
+                assert!(N <= 32);
+        }
+
+        // We unroll here because vshlq_n_u32 only accepts constants from 0 to 31.
+        match N {
+            0 => el,
+            1 => vshlq_n_u32::<1>(el),
+            2 => vshlq_n_u32::<2>(el),
+            3 => vshlq_n_u32::<3>(el),
+            4 => vshlq_n_u32::<4>(el),
+            5 => vshlq_n_u32::<5>(el),
+            6 => vshlq_n_u32::<6>(el),
+            7 => vshlq_n_u32::<7>(el),
+            8 => vshlq_n_u32::<8>(el),
+            9 => vshlq_n_u32::<9>(el),
+            10 => vshlq_n_u32::<10>(el),
+            11 => vshlq_n_u32::<11>(el),
+            12 => vshlq_n_u32::<12>(el),
+            13 => vshlq_n_u32::<13>(el),
+            14 => vshlq_n_u32::<14>(el),
+            15 => vshlq_n_u32::<15>(el),
+            16 => vshlq_n_u32::<16>(el),
+            17 => vshlq_n_u32::<17>(el),
+            18 => vshlq_n_u32::<18>(el),
+            19 => vshlq_n_u32::<19>(el),
+            20 => vshlq_n_u32::<20>(el),
+            21 => vshlq_n_u32::<21>(el),
+            22 => vshlq_n_u32::<22>(el),
+            23 => vshlq_n_u32::<23>(el),
+            24 => vshlq_n_u32::<24>(el),
+            25 => vshlq_n_u32::<25>(el),
+            26 => vshlq_n_u32::<26>(el),
+            27 => vshlq_n_u32::<27>(el),
+            28 => vshlq_n_u32::<28>(el),
+            29 => vshlq_n_u32::<29>(el),
+            30 => vshlq_n_u32::<30>(el),
+            31 => vshlq_n_u32::<31>(el),
+            32 => vdupq_n_u32(0),
+            _ => core::hint::unreachable_unchecked(),
+        }
+    }
+
+    use vorrq_u32 as op_or;
+
+    #[inline]
+    unsafe fn op_and(left: DataType, right: DataType) -> DataType {
+        vandq_u32(left, right)
+    }
+
+    #[inline]
+    unsafe fn load_unaligned(addr: *const DataType) -> DataType {
+        vld1q_u32(addr.cast::<u32>())
+    }
+
+    #[inline]
+    unsafe fn store_unaligned(addr: *mut DataType, data: DataType) {
+        vst1q_u32(addr.cast::<u32>(), data);
+    }
+
+    #[inline]
+    /// Collapses the vector by performing a bitwise OR across all lanes
+    unsafe fn or_collapse_to_u32(acc: DataType) -> u32 {
+        vgetq_lane_u32(acc, 0)
+            | vgetq_lane_u32(acc, 1)
+            | vgetq_lane_u32(acc, 2)
+            | vgetq_lane_u32(acc, 3)
+    }
+
+    unsafe fn compute_delta(curr: DataType, prev: DataType) -> DataType {
+        // Build a vector with [prev[3], curr[0], curr[1], curr[2]]
+        let prev_shifted = vextq_u32(prev, curr, 3);
+        vsubq_u32(curr, prev_shifted)
+    }
+
     #[allow(non_snake_case)]
     #[inline]
     unsafe fn integrate_delta(prev: DataType, delta: DataType) -> DataType {
-        let base = vdupq_n_u32(prev[3]);
+        let base = vdupq_n_u32(vgetq_lane_u32(prev, 3));
         let zero = vdupq_n_u32(0);
-        let a__b__c__d_ = vld1q_u32(delta.as_ptr());
+        let a__b__c__d_ = delta;
         let ______a__b_ = vextq_u32(zero, a__b__c__d_, 2);
         let a__b__ca_db = vaddq_u32(______a__b_, a__b__c__d_);
         let ___a__b__ca = vextq_u32(zero, a__b__ca_db, 3);
         let a_ab_abc_abcd = vaddq_u32(___a__b__ca, a__b__ca_db);
-        let mut r = set1(0);
-        vst1q_u32(r.as_mut_ptr(), vaddq_u32(base, a_ab_abc_abcd));
-        r
+        vaddq_u32(base, a_ab_abc_abcd)
     }
 
-    // TODO trinity-1686a: I believe add/sub are easy enough for the compiler to optimize on its
-    // own, and suspect hand-rolled impl would force (un)loading registers and make things slower
-    // overall
+    #[inline]
+    unsafe fn add(left: DataType, right: DataType) -> DataType {
+        vaddq_u32(left, right)
+    }
+
+    #[inline]
+    unsafe fn sub(left: DataType, right: DataType) -> DataType {
+        vsubq_u32(left, right)
+    }
 
     declare_bitpacker!(target_feature(enable = "neon"));
 
