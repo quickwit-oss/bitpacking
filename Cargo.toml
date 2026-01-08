@@ -14,7 +14,7 @@ edition = "2021"
 crunchy = "0.2"
 
 [dev-dependencies]
-rand = "0.8"
+rand = "0.9"
 criterion = { version = "0.3", features = ["html_reports"] }
 proptest = "1.4"
 
