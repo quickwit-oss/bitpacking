@@ -21,7 +21,7 @@ It makes it possible to compress/decompress :
 Just add to your `Cargo.toml` :
 
 ```toml
-bitpacking = "0.9"
+bitpacking = "0.10"
 ```
 
 For some bitpacking flavor and for some platform, the bitpacking crate
@@ -63,13 +63,13 @@ For instance, assuming a block of `4`, when encoding `4, 9, 3, 2`. Assuming that
 
 As a result, each integer of this block will only require 4 bits.
 
-## Choosing between BitPacker1x, BitPacker4x and BitPacker8x.
+## Choosing between BitPacker1x, BitPacker4x, BitPacker8x and BitPacker16x.
 
-:warning: `BitPacker1x`, `BitPacker4x`, and `BitPacker8x` produce different formats,
+:warning: `BitPacker1x`, `BitPacker4x`, `BitPacker8x`, and `BitPacker16x` produce different formats,
 and are incompatible one with another.
 
-`BitPacker4x` and `BitPacker8x` are designed specifically to leverage `SSE3` and `AVX2`
-instructions respectively.
+`BitPacker4x`, `BitPacker8x`, and `BitPacker16x` are designed specifically to leverage `SSE3`, `AVX2`
+and `AVX-512` instructions respectively.
 
 It will safely fall back at runtime to a scalar implementation of these format if these instruction sets are not available on the running CPU.
 
@@ -92,6 +92,12 @@ One block must contain `128 integers`.
 `BitPacker8x` bits ordering works in layers of 8 integers. This gives an opportunity
 to leverage `AVX2` instructions to encode and decode the stream.
 One block must contain `256 integers`.
+
+#### BitPacker16x
+
+`BitPacker16x` bits ordering works in layers of 16 integers. This gives an opportunity
+to leverage `AVX-512` instructions to encode and decode the stream.
+One block must contain `512 integers`.
 
 
 
@@ -173,6 +179,25 @@ cargo bench
 | compress_delta   | 600 millions int/s |
 | decompress       | 6.5 billions int/s |
 | decompress_delta | 5.6 billions int/s |
+
+## BitPacker16x (assuming AVX-512 instructions are available)
+
+The laptop above has no AVX-512, so these were measured separately on an AWS
+`r8a.xlarge` (AMD EPYC 9R45, Zen 5), one thread, 24-bit values. `BitPacker8x` on
+the **same machine** is listed alongside for a fair comparison (the tables above
+are a different CPU and are not directly comparable to these).
+
+| operation        | BitPacker8x (AVX2)   | BitPacker16x (AVX-512) |
+|:-----------------|:---------------------|:-----------------------|
+| compress         | 18.0 billions int/s  | 17.2 billions int/s    |
+| compress_delta   | 15.4 billions int/s  | 15.7 billions int/s    |
+| decompress       | 36.9 billions int/s  | 41.3 billions int/s    |
+| decompress_delta | 180 millions int/s   | 11.7 billions int/s    |
+
+`BitPacker16x` matches `BitPacker8x` on the non-delta paths and is ~12% faster on
+`decompress`, while packing 512 integers per block. The large `decompress_delta`
+gap reflects a slow `BitPacker8x` (AVX2) delta-integration path rather than a 16x
+speedup per se.
 
 
 ## Reference

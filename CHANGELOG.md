@@ -1,3 +1,10 @@
+# bitpacking 0.10.0
+
+- Add `BitPacker16x`, a 512-bit / 16-lane bitpacking flavor that leverages
+  `AVX-512` instructions, with a scalar fallback. Like the other flavors it
+  detects the instruction set at runtime and falls back to scalar when AVX-512
+  is unavailable. Enabled by default via the new `bitpacker16x` feature.
+
 # bitpacking 0.9.3
 
 - Performance improvements in BitPacker4x for ARM

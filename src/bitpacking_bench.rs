@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Bencher, Criterion};
 use std::time::Duration;
 
-use bitpacking::{BitPacker, BitPacker1x, BitPacker4x, BitPacker8x};
+use bitpacking::{BitPacker, BitPacker1x, BitPacker4x, BitPacker8x, BitPacker16x};
 use criterion::Benchmark;
 use criterion::Throughput;
 
@@ -322,6 +322,7 @@ fn criterion_benchmark(criterion: &mut Criterion) {
     criterion_benchmark_bitpacker("BitPacker1x", BitPacker1x::new(), criterion);
     criterion_benchmark_bitpacker("BitPacker4x", BitPacker4x::new(), criterion);
     criterion_benchmark_bitpacker("BitPacker8x", BitPacker8x::new(), criterion);
+    criterion_benchmark_bitpacker("BitPacker16x", BitPacker16x::new(), criterion);
 }
 
 criterion_group! {

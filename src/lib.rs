@@ -7,13 +7,13 @@
 /*!  # Fast Bitpacking algorithms
 
 This crate is a **Rust port of [Daniel Lemire's simdcomp C library](https://github.com/lemire/simdcomp)**.
-It contains different flavor of integers compression via bitpacking :  `BitPacker1x`, `BitPacker4x`, and `BitPacker8x`.
+It contains different flavor of integers compression via bitpacking :  `BitPacker1x`, `BitPacker4x`, `BitPacker8x`, and `BitPacker16x`.
 
 Each produces different formats, and are incompatible one with another,
 and requires integers to be encoded in block of different size..
 
-`BitPacker4x` and `BitPacker8x` are designed specifically to leverage `SSE3`
-and `AVX2` instructions respectively.
+`BitPacker4x`, `BitPacker8x`, and `BitPacker16x` are designed specifically to leverage `SSE3`,
+`AVX2`, and `AVX-512` instructions respectively.
 
 The library will fall back to a scalar implementation if these instruction
 sets are not available. For instance :
@@ -362,6 +362,9 @@ mod bitpacker4x_simple;
 #[cfg(feature = "bitpacker8x")]
 mod bitpacker8x;
 
+#[cfg(feature = "bitpacker16x")]
+mod bitpacker16x;
+
 #[cfg(all(feature = "bitpacker1x", not(debug_assertions)))]
 pub use bitpacker1x::BitPacker1x;
 #[cfg(all(feature = "bitpacker1x", debug_assertions))]
@@ -374,6 +377,9 @@ pub use bitpacker4x_simple::BitPacker4x;
 
 #[cfg(feature = "bitpacker8x")]
 pub use bitpacker8x::BitPacker8x;
+
+#[cfg(feature = "bitpacker16x")]
+pub use bitpacker16x::BitPacker16x;
 
 #[cfg(test)]
 mod tests_unit {
